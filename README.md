@@ -1,4 +1,4 @@
-# Captain-Compose
+# Captain Compose
 
 Captain Compose is a simple deployment agent that applies `docker-compose.yaml` files using the Docker engine.
 
