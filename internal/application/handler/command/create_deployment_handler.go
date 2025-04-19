@@ -11,6 +11,10 @@ type CreateDeploymentHandler struct {
 	publisher event.Publisher
 }
 
+func NewCreateDeploymentHandler(publisher event.Publisher) *CreateDeploymentHandler {
+	return &CreateDeploymentHandler{publisher: publisher}
+}
+
 func (h *CreateDeploymentHandler) Handle(ctx context.Context, cmd command.CreateDeploymentCommand) error {
 	// do something with the command, e.g., create a deployment
 
