@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+type EventType string
+
+const (
+	EventTypeDeploymentCreated       EventType = "deployment_created"
+	EventTypeDeploymentFailed        EventType = "deployment_failed"
+	EventTypeDeploymentRemoved       EventType = "deployment_removed"
+	EventTypeDeploymentRemovalFailed EventType = "deployment_removal_failed"
+)
+
 type Event struct {
 	Message   string
 	Type      EventType
