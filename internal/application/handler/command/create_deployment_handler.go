@@ -20,7 +20,7 @@ func NewCreateDeploymentHandler(runtime runtime.Runtime, publisher event.Publish
 func (h *CreateDeploymentHandler) Handle(ctx context.Context, cmd command.CreateDeploymentCommand) error {
 	if err := h.runtime.Deploy(ctx, cmd.Deployment); err != nil {
 		if pubErr := h.publisher.Publish(ctx, event.NewDeploymentFailedEvent(cmd.Deployment.Name, err)); pubErr != nil {
-			// log the error if publishing fails
+			// Ignoring error as it is unlikely with in-memory publishing.
 		}
 		return err
 	}

@@ -20,7 +20,7 @@ func NewRemoveDeploymentHandler(runtime runtime.Runtime, publisher event.Publish
 func (h *RemoveDeploymentHandler) Handle(ctx context.Context, cmd command.RemoveDeploymentCommand) error {
 	if err := h.runtime.Remove(ctx, cmd.Name); err != nil {
 		if pubErr := h.publisher.Publish(ctx, event.NewDeploymentFailedEvent(cmd.Name, err)); pubErr != nil {
-			// log the error if publishing fails
+			// Ignoring error as it is unlikely with in-memory publishing.
 		}
 		return err
 	}
