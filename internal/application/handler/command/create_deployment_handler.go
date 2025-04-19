@@ -18,6 +18,9 @@ func NewCreateDeploymentHandler(publisher event.Publisher) *CreateDeploymentHand
 func (h *CreateDeploymentHandler) Handle(ctx context.Context, cmd command.CreateDeploymentCommand) error {
 	// do something with the command, e.g., create a deployment
 
-	h.publisher.Publish(ctx, event.NewDeploymentCreatedEvent(cmd.Deployment.Name))
+	if err := h.publisher.Publish(ctx, event.NewDeploymentCreatedEvent(cmd.Deployment.Name)); err != nil {
+		return err
+	}
+
 	return nil
 }

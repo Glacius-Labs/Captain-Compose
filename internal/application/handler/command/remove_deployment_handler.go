@@ -18,6 +18,9 @@ func NewRemoveDeploymentHandler(publisher event.Publisher) *RemoveDeploymentHand
 func (h *RemoveDeploymentHandler) Handle(ctx context.Context, cmd command.RemoveDeploymentCommand) error {
 	// do something with the command, e.g., remove a deployment
 
-	h.publisher.Publish(ctx, event.NewDeploymentRemovedEvent(cmd.Name))
+	if err := h.publisher.Publish(ctx, event.NewDeploymentRemovedEvent(cmd.Name)); err != nil {
+		return err
+	}
+
 	return nil
 }
