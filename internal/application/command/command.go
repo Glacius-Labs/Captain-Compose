@@ -1,6 +1,7 @@
 package command
 
-// Marker interface for command types
+type Type string
+
 type Command interface {
-	IsCommand()
+	Type() Type
 }
