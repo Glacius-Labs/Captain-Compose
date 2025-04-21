@@ -1,16 +1,29 @@
 package event
 
 import (
-	"fmt"
 	"time"
 )
 
 const EventTypeDeploymentFailed EventType = "deployment_failed"
 
-func NewDeploymentFailedEvent(name string, err error) Event {
-	return Event{
-		Message:   fmt.Sprintf("Deployment %s failed: %v", name, err),
-		Type:      EventTypeDeploymentFailed,
-		Timestamp: time.Now(),
+type DeploymentFailedEvent struct {
+	DeploymentName string
+	Error          string
+	CreatedAt      time.Time
+}
+
+func NewDeploymentFailedEvent(deploymentName string, err error) *DeploymentFailedEvent {
+	return &DeploymentFailedEvent{
+		DeploymentName: deploymentName,
+		Error:          err.Error(),
+		CreatedAt:      time.Now(),
 	}
+}
+
+func (e *DeploymentFailedEvent) Type() EventType {
+	return EventTypeDeploymentFailed
+}
+
+func (e *DeploymentFailedEvent) Timestamp() time.Time {
+	return e.CreatedAt
 }

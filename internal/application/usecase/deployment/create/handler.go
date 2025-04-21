@@ -9,12 +9,12 @@ import (
 )
 
 type handler struct {
-	runtime   runtime.Runtime
-	publisher event.Publisher
+	runtime    runtime.Runtime
+	dispatcher event.Dispatcher
 }
 
-func NewHandler(runtime runtime.Runtime, publisher event.Publisher) *handler {
-	return &handler{runtime: runtime, publisher: publisher}
+func NewHandler(runtime runtime.Runtime, dispatcher event.Dispatcher) *handler {
+	return &handler{runtime: runtime, dispatcher: dispatcher}
 }
 
 func (h *handler) CommandType() command.Type {
@@ -28,15 +28,11 @@ func (h *handler) Handle(ctx context.Context, cmd command.Command) error {
 	}
 
 	if err := h.runtime.Deploy(ctx, createCmd.Deployment); err != nil {
-		if pubErr := h.publisher.Publish(ctx, event.NewDeploymentFailedEvent(createCmd.Deployment.Name, err)); pubErr != nil {
-			// Ignoring error as it is unlikely with in-memory publishing.
-		}
+		h.dispatcher.Dispatch(ctx, event.NewDeploymentFailedEvent(createCmd.Deployment.Name, err))
 		return err
 	}
 
-	if err := h.publisher.Publish(ctx, event.NewDeploymentCreatedEvent(createCmd.Deployment.Name)); err != nil {
-		return err
-	}
+	h.dispatcher.Dispatch(ctx, event.NewDeploymentCreatedEvent(createCmd.Deployment))
 
 	return nil
 }

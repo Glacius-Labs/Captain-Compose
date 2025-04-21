@@ -6,8 +6,7 @@ import (
 
 type EventType string
 
-type Event struct {
-	Message   string
-	Type      EventType
-	Timestamp time.Time
+type Event interface {
+	Type() EventType
+	Timestamp() time.Time
 }

@@ -1,16 +1,29 @@
 package event
 
 import (
-	"fmt"
 	"time"
+
+	"github.com/glacius-labs/captain-compose/internal/core/model"
 )
 
 const EventTypeDeploymentCreated EventType = "deployment_created"
 
-func NewDeploymentCreatedEvent(name string) Event {
-	return Event{
-		Message:   fmt.Sprintf("Deployment %s created", name),
-		Type:      EventTypeDeploymentCreated,
-		Timestamp: time.Now(),
+type DeploymentCreatedEvent struct {
+	Deployment model.Deployment
+	CreatedAt  time.Time
+}
+
+func NewDeploymentCreatedEvent(deployment model.Deployment) *DeploymentCreatedEvent {
+	return &DeploymentCreatedEvent{
+		Deployment: deployment,
+		CreatedAt:  time.Now(),
 	}
+}
+
+func (e *DeploymentCreatedEvent) Type() EventType {
+	return EventTypeDeploymentCreated
+}
+
+func (e *DeploymentCreatedEvent) Timestamp() time.Time {
+	return e.CreatedAt
 }
