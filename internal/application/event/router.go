@@ -4,29 +4,29 @@ import (
 	"context"
 )
 
-type router struct {
+type Router struct {
 	middleware Middleware
 	handlers   []Handler
 }
 
-func NewRouter() *router {
-	return &router{
+func NewRouter() *Router {
+	return &Router{
 		middleware: noOpMiddleware,
 		handlers:   make([]Handler, 0),
 	}
 }
 
-func (r *router) Register(handler Handler) {
+func (r *Router) Register(handler Handler) {
 	r.handlers = append(r.handlers, handler)
 }
 
-func (r *router) Use(middleware Middleware) {
+func (r *Router) Use(middleware Middleware) {
 	r.middleware = func(next Handler) Handler {
 		return middleware(r.middleware(next))
 	}
 }
 
-func (r *router) Dispatch(ctx context.Context, event Event) {
+func (r *Router) Dispatch(ctx context.Context, event Event) {
 	for _, handler := range r.handlers {
 		h := r.middleware(handler)
 		go func(handler Handler) {
