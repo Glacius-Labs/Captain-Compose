@@ -37,3 +37,7 @@ func (r *router) Dispatch(ctx context.Context, event event.Event) {
 		}(h)
 	}
 }
+
+func noOpMiddleware(next Handler) Handler {
+	return next
+}
