@@ -2,21 +2,22 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/glacius-labs/captain-compose/internal/application/command"
 	"github.com/glacius-labs/captain-compose/internal/application/event"
-	"github.com/glacius-labs/captain-compose/internal/application/runtime"
+	"github.com/glacius-labs/captain-compose/internal/core/deployment"
 	"github.com/glacius-labs/captain-compose/internal/infrastructure/docker"
 )
 
 type app struct {
-	Runtime       runtime.Runtime
+	Runtime       deployment.Runtime
 	CommandRouter *command.Router
 	EventRouter   *event.Router
 	listeners     []Listener
 }
 
-func NewApp(runtime runtime.Runtime) *app {
+func NewApp(runtime deployment.Runtime) *app {
 	return &app{
 		Runtime:       runtime,
 		CommandRouter: command.NewRouter(),
@@ -25,15 +26,10 @@ func NewApp(runtime runtime.Runtime) *app {
 	}
 }
 
-func NewDockerApp(composeDir string) (*app, error) {
-	store, err := docker.NewStore(composeDir)
+func NewDockerApp(workingDir string) (*app, error) {
+	runtime, err := docker.NewRuntime(workingDir)
 	if err != nil {
-		return nil, err
-	}
-
-	runtime, err := docker.NewRuntime(store)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create docker runtime: %w", err)
 	}
 
 	return &app{

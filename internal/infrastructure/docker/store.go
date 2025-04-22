@@ -15,7 +15,7 @@ type store struct {
 	deployments map[string]deployment.Deployment
 }
 
-func NewStore(dir string) (*store, error) {
+func newStore(dir string) (*store, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}

@@ -14,9 +14,10 @@ type runtime struct {
 	mu    sync.Mutex
 }
 
-func NewRuntime(store *store) (*runtime, error) {
-	if store == nil {
-		panic("docker runtime requires a non-nil store")
+func NewRuntime(dir string) (*runtime, error) {
+	store, err := newStore(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create store: %w", err)
 	}
 
 	r := &runtime{store: store}
@@ -26,6 +27,14 @@ func NewRuntime(store *store) (*runtime, error) {
 	}
 
 	return r, nil
+}
+
+func (r *runtime) List(ctx context.Context) ([]deployment.Deployment, error) {
+	panic("not implemented")
+}
+
+func (r *runtime) Get(ctx context.Context, name string) (deployment.Deployment, error) {
+	panic("not implemented")
 }
 
 func (r *runtime) Deploy(ctx context.Context, d deployment.Deployment) error {
