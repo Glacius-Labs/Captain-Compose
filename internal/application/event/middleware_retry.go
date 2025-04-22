@@ -3,11 +3,13 @@ package event
 import (
 	"context"
 	"time"
+
+	"github.com/glacius-labs/captain-compose/internal/core/event"
 )
 
 func RetryMiddleware(retries int, delay time.Duration) Middleware {
 	return func(next Handler) Handler {
-		return HandlerFunc(func(ctx context.Context, event Event) error {
+		return HandlerFunc(func(ctx context.Context, event event.Event) error {
 			var err error
 			for i := 0; i <= retries; i++ {
 				err = next.Handle(ctx, event)

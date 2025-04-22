@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/glacius-labs/captain-compose/internal/application/command"
+	"github.com/glacius-labs/captain-compose/internal/application/event"
 	"github.com/glacius-labs/captain-compose/internal/core/deployment"
-	"github.com/glacius-labs/captain-compose/internal/core/event"
 	"github.com/glacius-labs/captain-compose/internal/core/runtime"
 )
 

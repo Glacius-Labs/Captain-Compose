@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/glacius-labs/captain-compose/internal/application/command"
+	"github.com/glacius-labs/captain-compose/internal/application/event"
 	"github.com/glacius-labs/captain-compose/internal/core/deployment"
-	"github.com/glacius-labs/captain-compose/internal/core/event"
 	"github.com/glacius-labs/captain-compose/internal/core/runtime"
 )
 
@@ -29,7 +29,7 @@ func (h *handler) Handle(ctx context.Context, cmd command.Command) error {
 	}
 
 	if err := h.runtime.Deploy(ctx, createCmd.Deployment); err != nil {
-		h.dispatcher.Dispatch(ctx, deployment.NewFailedEvent(createCmd.Deployment.Name, err))
+		h.dispatcher.Dispatch(ctx, deployment.NewCreationFailedEvent(createCmd.Deployment.Name, err))
 		return err
 	}
 

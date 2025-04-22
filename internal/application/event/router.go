@@ -1,6 +1,10 @@
 package event
 
-import "context"
+import (
+	"context"
+
+	"github.com/glacius-labs/captain-compose/internal/core/event"
+)
 
 type router struct {
 	middleware Middleware
@@ -24,12 +28,12 @@ func (r *router) Use(middleware Middleware) {
 	}
 }
 
-func (r *router) Dispatch(ctx context.Context, evt Event) {
+func (r *router) Dispatch(ctx context.Context, event event.Event) {
 	for _, handler := range r.handlers {
 		h := r.middleware(handler)
 		go func(handler Handler) {
 			// Middleware is responsible for error handling. By default, errors are ignored.
-			_ = handler.Handle(ctx, evt)
+			_ = handler.Handle(ctx, event)
 		}(h)
 	}
 }
