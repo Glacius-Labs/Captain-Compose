@@ -25,6 +25,26 @@ func NewRuntime(failDeploy, failRemove bool) *runtime {
 	}
 }
 
+func (m *runtime) List(ctx context.Context) ([]deployment.Deployment, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	deployments := make([]deployment.Deployment, 0, len(m.Deployments))
+	for _, deployment := range m.Deployments {
+		deployments = append(deployments, deployment)
+	}
+
+	return deployments, nil
+}
+
+func (m *runtime) Get(ctx context.Context, name string) (deployment.Deployment, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	deployment, ok := m.Deployments[name]
+	return deployment, ok
+}
+
 func (m *runtime) Deploy(ctx context.Context, deployment deployment.Deployment) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
