@@ -6,15 +6,14 @@ import (
 	"github.com/glacius-labs/captain-compose/internal/application/command"
 	"github.com/glacius-labs/captain-compose/internal/application/event"
 	"github.com/glacius-labs/captain-compose/internal/core/deployment"
-	"github.com/glacius-labs/captain-compose/internal/core/runtime"
 )
 
 type handler struct {
-	runtime    runtime.Runtime
+	runtime    deployment.Runtime
 	dispatcher event.Dispatcher
 }
 
-func NewHandler(runtime runtime.Runtime, dispatcher event.Dispatcher) *handler {
+func NewHandler(runtime deployment.Runtime, dispatcher event.Dispatcher) *handler {
 	return &handler{runtime: runtime, dispatcher: dispatcher}
 }
 
