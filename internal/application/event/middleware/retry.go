@@ -4,13 +4,12 @@ import (
 	"context"
 	"time"
 
-	applicationEvent "github.com/glacius-labs/captain-compose/internal/application/event"
-	"github.com/glacius-labs/captain-compose/internal/core/event"
+	"github.com/glacius-labs/captain-compose/internal/application/event"
 )
 
-func Retry(retries int, delay time.Duration) applicationEvent.Middleware {
-	return func(next applicationEvent.Handler) applicationEvent.Handler {
-		return applicationEvent.HandlerFunc(func(ctx context.Context, event event.Event) error {
+func Retry(retries int, delay time.Duration) event.Middleware {
+	return func(next event.Handler) event.Handler {
+		return event.HandlerFunc(func(ctx context.Context, event event.Event) error {
 			var err error
 			for range retries {
 				err = next.Handle(ctx, event)

@@ -2,8 +2,6 @@ package event
 
 import (
 	"context"
-
-	"github.com/glacius-labs/captain-compose/internal/core/event"
 )
 
 type router struct {
@@ -28,7 +26,7 @@ func (r *router) Use(middleware Middleware) {
 	}
 }
 
-func (r *router) Dispatch(ctx context.Context, event event.Event) {
+func (r *router) Dispatch(ctx context.Context, event Event) {
 	for _, handler := range r.handlers {
 		h := r.middleware(handler)
 		go func(handler Handler) {

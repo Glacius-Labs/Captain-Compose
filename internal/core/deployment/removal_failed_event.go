@@ -2,11 +2,9 @@ package deployment
 
 import (
 	"time"
-
-	"github.com/glacius-labs/captain-compose/internal/core/event"
 )
 
-const TypeRemovalFailed event.Type = "deployment_removal_failed"
+const TypeRemovalFailed = "deployment_removal_failed"
 
 type RemovalFailedEvent struct {
 	DeploymentName string
@@ -22,7 +20,7 @@ func NewRemovalFailedEvent(deploymentName string, err error) *RemovalFailedEvent
 	}
 }
 
-func (e *RemovalFailedEvent) Type() event.Type {
+func (e *RemovalFailedEvent) Type() string {
 	return TypeRemovalFailed
 }
 

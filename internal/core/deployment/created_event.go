@@ -2,11 +2,9 @@ package deployment
 
 import (
 	"time"
-
-	"github.com/glacius-labs/captain-compose/internal/core/event"
 )
 
-const TypeCreated event.Type = "deployment_created"
+const TypeCreated string = "deployment_created"
 
 type CreatedEvent struct {
 	Deployment Deployment
@@ -20,7 +18,7 @@ func NewCreatedEvent(deployment Deployment) *CreatedEvent {
 	}
 }
 
-func (e *CreatedEvent) Type() event.Type {
+func (e *CreatedEvent) Type() string {
 	return TypeCreated
 }
 
