@@ -7,14 +7,14 @@ import (
 const TypeCreated string = "deployment_created"
 
 type CreatedEvent struct {
-	Deployment Deployment
-	CreatedAt  time.Time
+	DeploymentName string
+	CreatedAt      time.Time
 }
 
-func NewCreatedEvent(deployment Deployment) *CreatedEvent {
+func NewCreatedEvent(deploymentName string) *CreatedEvent {
 	return &CreatedEvent{
-		Deployment: deployment,
-		CreatedAt:  time.Now(),
+		DeploymentName: deploymentName,
+		CreatedAt:      time.Now(),
 	}
 }
 

@@ -33,7 +33,7 @@ func (h *handler) Handle(ctx context.Context, cmd command.Command) error {
 		return err
 	}
 
-	h.dispatcher.Dispatch(ctx, deployment.NewCreatedEvent(createCmd.Deployment))
+	h.dispatcher.Dispatch(ctx, deployment.NewCreatedEvent(createCmd.Deployment.Name))
 
 	return nil
 }
