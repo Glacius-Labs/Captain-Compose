@@ -1,4 +1,4 @@
-package model
+package deployment
 
 type Deployment struct {
 	Name    string

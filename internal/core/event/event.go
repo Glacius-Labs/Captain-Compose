@@ -4,9 +4,9 @@ import (
 	"time"
 )
 
-type EventType string
+type Type string
 
 type Event interface {
-	Type() EventType
+	Type() Type
 	Timestamp() time.Time
 }

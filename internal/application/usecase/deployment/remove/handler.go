@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/glacius-labs/captain-compose/internal/application/command"
+	"github.com/glacius-labs/captain-compose/internal/core/deployment"
 	"github.com/glacius-labs/captain-compose/internal/core/event"
 	"github.com/glacius-labs/captain-compose/internal/core/runtime"
 )
@@ -28,11 +29,11 @@ func (h *handler) Handle(ctx context.Context, cmd command.Command) error {
 	}
 
 	if err := h.runtime.Remove(ctx, removeCmd.Name); err != nil {
-		h.dispatcher.Dispatch(ctx, event.NewDeploymentFailedEvent(removeCmd.Name, err))
+		h.dispatcher.Dispatch(ctx, deployment.NewRemovalFailedEvent(removeCmd.Name, err))
 		return err
 	}
 
-	h.dispatcher.Dispatch(ctx, event.NewDeploymentRemovedEvent(removeCmd.Name))
+	h.dispatcher.Dispatch(ctx, deployment.NewRemovedEvent(removeCmd.Name))
 
 	return nil
 }
