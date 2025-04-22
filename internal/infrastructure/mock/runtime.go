@@ -1,4 +1,4 @@
-package runtime
+package mock
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/glacius-labs/captain-compose/internal/core/deployment"
 )
 
-type mockRuntime struct {
+type runtime struct {
 	mu sync.Mutex
 
 	Deployments map[string]deployment.Deployment
@@ -17,15 +17,15 @@ type mockRuntime struct {
 	FailRemove bool
 }
 
-func NewMockRuntime(failDeploy, failRemove bool) *mockRuntime {
-	return &mockRuntime{
+func NewRuntime(failDeploy, failRemove bool) *runtime {
+	return &runtime{
 		Deployments: make(map[string]deployment.Deployment),
 		FailDeploy:  failDeploy,
 		FailRemove:  failRemove,
 	}
 }
 
-func (m *mockRuntime) Deploy(ctx context.Context, deployment deployment.Deployment) error {
+func (m *runtime) Deploy(ctx context.Context, deployment deployment.Deployment) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -38,7 +38,7 @@ func (m *mockRuntime) Deploy(ctx context.Context, deployment deployment.Deployme
 	return nil
 }
 
-func (m *mockRuntime) Remove(ctx context.Context, name string) error {
+func (m *runtime) Remove(ctx context.Context, name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
