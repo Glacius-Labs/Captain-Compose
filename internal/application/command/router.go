@@ -24,7 +24,7 @@ func (r *Router) Register(handler Handler) error {
 		return fmt.Errorf("handler for command type %q already registered", cmdType)
 	}
 	r.handlers[cmdType] = handler
-	r.logger.Info("Registered command handler", "command_type", cmdType)
+	r.logger.Debug("Registered command handler", "command_type", cmdType)
 	return nil
 }
 

@@ -24,11 +24,11 @@ func (r *Router) RegisterFunc(name string, handlerFunc HandlerFunc) {
 
 func (r *Router) RegisterHandler(handler Handler) {
 	r.handlers = append(r.handlers, handler)
-	r.logger.Info("Registered handler", "handler_name", handler.Name())
+	r.logger.Debug("Registered handler", "handler_name", handler.Name())
 }
 
 func (r *Router) Dispatch(ctx context.Context, event Event) {
-	r.logger.Info("Started dispatching event to handlers",
+	r.logger.Debug("Started dispatching event to handlers",
 		"event_id", event.Identifier().String(),
 		"event_type", event.Type(),
 	)
@@ -36,14 +36,14 @@ func (r *Router) Dispatch(ctx context.Context, event Event) {
 	for _, h := range r.handlers {
 		go func(h Handler) {
 			if err := h.Handle(ctx, event); err != nil {
-				r.logger.Error("Error handling event",
+				r.logger.Error("Handler encountered an error while processing event",
 					"event_id", event.Identifier().String(),
 					"event_type", event.Type(),
 					"handler", h.Name(),
 					"error", err,
 				)
 			} else {
-				r.logger.Info("Event handled successfully",
+				r.logger.Debug("Handler completed successfully",
 					"event_id", event.Identifier().String(),
 					"event_type", event.Type(),
 					"handler", h.Name(),
