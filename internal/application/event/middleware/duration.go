@@ -2,20 +2,24 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/glacius-labs/captain-compose/internal/application/event"
 )
 
-func Duration(log func(event event.Event, duration time.Duration)) event.Middleware {
-	return func(next event.Handler) event.Handler {
-		return event.HandlerFunc(func(ctx context.Context, event event.Event) (err error) {
+func Duration(logger *slog.Logger) func(event.HandlerFunc) event.HandlerFunc {
+	return func(next event.HandlerFunc) event.HandlerFunc {
+		return func(ctx context.Context, e event.Event) error {
 			start := time.Now()
 			defer func() {
-				log(event, time.Since(start))
+				logger.Debug("event duration",
+					"event_id", e.Identifier(),
+					"event_type", e.Type(),
+					"duration", time.Since(start),
+				)
 			}()
-			err = next.Handle(ctx, event)
-			return err
-		})
+			return next(ctx, e)
+		}
 	}
 }

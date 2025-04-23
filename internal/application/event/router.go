@@ -2,40 +2,53 @@ package event
 
 import (
 	"context"
+	"log/slog"
 )
 
 type Router struct {
-	middleware Middleware
-	handlers   []Handler
+	handlers []Handler
+	logger   *slog.Logger
 }
 
-func NewRouter() *Router {
+func NewRouter(logger *slog.Logger) *Router {
 	return &Router{
-		middleware: noOpMiddleware,
-		handlers:   make([]Handler, 0),
+		handlers: make([]Handler, 0),
+		logger:   logger,
 	}
 }
 
-func (r *Router) Register(handler Handler) {
+func (r *Router) RegisterFunc(name string, handlerFunc HandlerFunc) {
+	wrapped := NewHandlerFunc(name, handlerFunc)
+	r.RegisterHandler(wrapped)
+}
+
+func (r *Router) RegisterHandler(handler Handler) {
 	r.handlers = append(r.handlers, handler)
-}
-
-func (r *Router) Use(middleware Middleware) {
-	r.middleware = func(next Handler) Handler {
-		return middleware(r.middleware(next))
-	}
+	r.logger.Info("Registered handler", "handler_name", handler.Name())
 }
 
 func (r *Router) Dispatch(ctx context.Context, event Event) {
-	for _, handler := range r.handlers {
-		h := r.middleware(handler)
-		go func(handler Handler) {
-			// Middleware is responsible for error handling. By default, errors are ignored.
-			_ = handler.Handle(ctx, event)
+	r.logger.Info("Started dispatching event to handlers",
+		"event_id", event.Identifier().String(),
+		"event_type", event.Type(),
+	)
+
+	for _, h := range r.handlers {
+		go func(h Handler) {
+			if err := h.Handle(ctx, event); err != nil {
+				r.logger.Error("Error handling event",
+					"event_id", event.Identifier().String(),
+					"event_type", event.Type(),
+					"handler", h.Name(),
+					"error", err,
+				)
+			} else {
+				r.logger.Info("Event handled successfully",
+					"event_id", event.Identifier().String(),
+					"event_type", event.Type(),
+					"handler", h.Name(),
+				)
+			}
 		}(h)
 	}
-}
-
-func noOpMiddleware(next Handler) Handler {
-	return next
 }

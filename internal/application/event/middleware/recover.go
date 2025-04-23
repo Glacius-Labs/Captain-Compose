@@ -3,13 +3,14 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/glacius-labs/captain-compose/internal/application/event"
 )
 
-func Recover(log func(event event.Event, err error)) event.Middleware {
-	return func(next event.Handler) event.Handler {
-		return event.HandlerFunc(func(ctx context.Context, event event.Event) (err error) {
+func Recover(logger *slog.Logger) func(event.HandlerFunc) event.HandlerFunc {
+	return func(next event.HandlerFunc) event.HandlerFunc {
+		return func(ctx context.Context, e event.Event) (err error) {
 			defer func() {
 				if r := recover(); r != nil {
 					var panicErr error
@@ -19,10 +20,14 @@ func Recover(log func(event event.Event, err error)) event.Middleware {
 					default:
 						panicErr = fmt.Errorf("panic recovered in event handler: %v", v)
 					}
-					log(event, panicErr)
+					logger.Error("Recovered from panic in handler",
+						"event_id", e.Identifier().String(),
+						"event_type", e.Type(),
+						"error", panicErr,
+					)
 				}
 			}()
-			return next.Handle(ctx, event)
-		})
+			return next(ctx, e)
+		}
 	}
 }
