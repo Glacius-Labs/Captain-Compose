@@ -1,103 +1,47 @@
 package docker
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 
 	"github.com/glacius-labs/captain-compose/internal/core/deployment"
+	"github.com/google/uuid"
 )
 
 type store struct {
-	mu          sync.RWMutex
-	dir         string
-	deployments map[string]deployment.Deployment
+	tempDirs []string
 }
 
-func newStore(dir string) (*store, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
+func newStore() *store {
+	return &store{
+		tempDirs: make([]string, 0),
 	}
-
-	s := &store{
-		dir:         dir,
-		deployments: make(map[string]deployment.Deployment),
-	}
-
-	if err := s.init(); err != nil {
-		return nil, err
-	}
-
-	return s, nil
 }
 
-func (s *store) Add(d deployment.Deployment) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *store) save(d deployment.Deployment, payload []byte) (string, error) {
+	id := uuid.NewString()
+	dirName := fmt.Sprintf("%s-%s", d.Name, id)
 
-	s.deployments[d.Name] = d
-
-	path := s.composeFilePath(d.Name)
-	return os.WriteFile(path, d.Content, 0644)
-}
-
-func (s *store) Remove(name string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.deployments, name)
-
-	path := s.composeFilePath(name)
-	err := os.Remove(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	return nil
-}
-
-func (s *store) Get(name string) (deployment.Deployment, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	d, ok := s.deployments[name]
-	return d, ok
-}
-
-func (s *store) All() []deployment.Deployment {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	out := make([]deployment.Deployment, 0, len(s.deployments))
-	for _, d := range s.deployments {
-		out = append(out, d)
-	}
-	return out
-}
-
-func (s *store) composeFilePath(name string) string {
-	return filepath.Join(s.dir, name+".yml")
-}
-
-func (s *store) init() error {
-	files, err := filepath.Glob(filepath.Join(s.dir, "*.yml"))
+	dir, err := os.MkdirTemp("", dirName)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			continue // Skip corrupted/broken files, but continue recovery
-		}
-		name := strings.TrimSuffix(filepath.Base(file), ".yml")
-
-		s.deployments[name] = deployment.Deployment{
-			Name:    name,
-			Content: content,
-		}
+	composeFile := filepath.Join(dir, "docker-compose.yaml")
+	if err := os.WriteFile(composeFile, payload, 0600); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", fmt.Errorf("failed to write compose file: %w", err)
 	}
 
-	return nil
+	s.tempDirs = append(s.tempDirs, dir)
+
+	return composeFile, nil
+}
+
+func (s *store) cleanup() {
+	for _, dir := range s.tempDirs {
+		_ = os.RemoveAll(dir)
+	}
+	s.tempDirs = nil
 }

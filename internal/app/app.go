@@ -27,7 +27,7 @@ func NewApp(runtime deployment.Runtime) *app {
 }
 
 func NewDockerApp(workingDir string) (*app, error) {
-	runtime, err := docker.NewRuntime(workingDir)
+	runtime, err := docker.NewRuntime()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker runtime: %w", err)
 	}

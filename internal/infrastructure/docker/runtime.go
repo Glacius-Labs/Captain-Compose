@@ -1,51 +1,63 @@
 package docker
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/glacius-labs/captain-compose/internal/core/deployment"
 )
 
 type runtime struct {
-	store *store
-	mu    sync.Mutex
+	store   *store
+	rwMutex sync.RWMutex
 }
 
-func NewRuntime(dir string) (*runtime, error) {
-	store, err := newStore(dir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create store: %w", err)
-	}
-
-	r := &runtime{store: store}
-
-	if err := r.cleanupDanglingProjects(context.Background()); err != nil {
-		return nil, fmt.Errorf("runtime cleanup failed: %w", err)
-	}
-
-	return r, nil
+func NewRuntime() (*runtime, error) {
+	return &runtime{
+		store: newStore(),
+	}, nil
 }
 
 func (r *runtime) List(ctx context.Context) ([]deployment.Deployment, error) {
-	panic("not implemented")
-}
+	r.rwMutex.RLock()
+	defer r.rwMutex.RUnlock()
 
-func (r *runtime) Get(ctx context.Context, name string) (deployment.Deployment, error) {
-	panic("not implemented")
-}
-
-func (r *runtime) Deploy(ctx context.Context, d deployment.Deployment) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if err := r.store.Add(d); err != nil {
-		return fmt.Errorf("failed to persist deployment: %w", err)
+	cmd := exec.CommandContext(ctx, "docker", "compose", "ls", "--format", "{{.Name}}")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, wrapExecError(err, "docker compose ls")
 	}
 
-	composeFile := r.store.composeFilePath(d.Name)
+	var deployments []deployment.Deployment
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		name := strings.TrimSpace(scanner.Text())
+		if name != "" {
+			deployments = append(deployments, deployment.Deployment{Name: name})
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to parse docker compose ls output: %w", err)
+	}
+
+	return deployments, nil
+}
+
+func (r *runtime) Deploy(ctx context.Context, d deployment.Deployment, payload []byte) error {
+	r.rwMutex.Lock()
+	defer r.rwMutex.Unlock()
+
+	composeFile, err := r.store.save(d, payload)
+	if err != nil {
+		return fmt.Errorf("failed to persist deployment: %w", err)
+	}
+	defer r.store.cleanup()
 
 	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "-p", d.Name, "up", "-d")
 	out, err := cmd.CombinedOutput()
@@ -57,18 +69,22 @@ func (r *runtime) Deploy(ctx context.Context, d deployment.Deployment) error {
 }
 
 func (r *runtime) Remove(ctx context.Context, name string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.rwMutex.Lock()
+	defer r.rwMutex.Unlock()
 
 	cmd := exec.CommandContext(ctx, "docker", "compose", "-p", name, "down", "--volumes", "--remove-orphans")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("docker compose down failed: %w\n%s", err, out)
-	}
-
-	if err := r.store.Remove(name); err != nil {
-		return fmt.Errorf("failed to clean up deployment store: %w", err)
+		return fmt.Errorf("docker compose down failed: %w\nstderr: %s", err, out)
 	}
 
 	return nil
+}
+
+func wrapExecError(err error, action string) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return fmt.Errorf("%s failed: %w\nstderr: %s", action, err, string(exitErr.Stderr))
+	}
+	return fmt.Errorf("%s failed: %w", action, err)
 }
