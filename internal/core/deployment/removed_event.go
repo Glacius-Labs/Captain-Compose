@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const TypeRemoved = "deployment_removed"
+const EvetTypeRemoved = "deployment.removed"
 
 type RemovedEvent struct {
 	ID             uuid.UUID
@@ -27,7 +27,7 @@ func (e *RemovedEvent) Identifier() uuid.UUID {
 }
 
 func (e *RemovedEvent) Type() string {
-	return TypeRemoved
+	return EvetTypeRemoved
 }
 
 func (e *RemovedEvent) Timestamp() time.Time {

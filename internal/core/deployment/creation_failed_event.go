@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const TypeCreationFailed = "deployment_creation_failed"
+const EvetTypeCreationFailed = "deployment.creation_failed"
 
 type CreationFailedEvent struct {
 	ID             uuid.UUID
@@ -31,7 +31,7 @@ func (e *CreationFailedEvent) Identifier() uuid.UUID {
 }
 
 func (e *CreationFailedEvent) Type() string {
-	return TypeCreationFailed
+	return EvetTypeCreationFailed
 }
 
 func (e *CreationFailedEvent) Timestamp() time.Time {

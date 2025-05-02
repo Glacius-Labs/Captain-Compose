@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const TypeCreated string = "deployment_created"
+const EvetTypeCreated string = "deployment.created"
 
 type CreatedEvent struct {
 	ID             uuid.UUID
@@ -29,7 +29,7 @@ func (e *CreatedEvent) Identifier() uuid.UUID {
 }
 
 func (e *CreatedEvent) Type() string {
-	return TypeCreated
+	return EvetTypeCreated
 }
 
 func (e *CreatedEvent) Timestamp() time.Time {
