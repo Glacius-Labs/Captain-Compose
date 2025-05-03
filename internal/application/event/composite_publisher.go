@@ -4,20 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 )
 
-type CompositePublisher struct {
+type compositePublisher struct {
 	publishers []Publisher
-	logger     *slog.Logger
 }
 
-func NewCompositePublisher(logger *slog.Logger, publishers ...Publisher) *CompositePublisher {
-	if logger == nil {
-		panic("logger cannot be nil")
-	}
-
+func NewCompositePublisher(publishers ...Publisher) *compositePublisher {
 	if len(publishers) == 0 {
 		panic("at least one publisher must be provided")
 	}
@@ -28,13 +22,12 @@ func NewCompositePublisher(logger *slog.Logger, publishers ...Publisher) *Compos
 		}
 	}
 
-	return &CompositePublisher{
+	return &compositePublisher{
 		publishers: publishers,
-		logger:     logger,
 	}
 }
 
-func (p *CompositePublisher) Name() string {
+func (p *compositePublisher) Name() string {
 	names := make([]string, len(p.publishers))
 	for i, publisher := range p.publishers {
 		names[i] = publisher.Name()
@@ -42,16 +35,11 @@ func (p *CompositePublisher) Name() string {
 	return fmt.Sprintf("CompositePublisher (%s)", strings.Join(names, ", "))
 }
 
-func (p *CompositePublisher) Publish(ctx context.Context, event Event) error {
+func (p *compositePublisher) Publish(ctx context.Context, event Event) error {
 	var errs []error
 
 	for _, publisher := range p.publishers {
 		if err := publisher.Publish(ctx, event); err != nil {
-			p.logger.Error("failed to publish event",
-				"publisher", publisher.Name(),
-				"event_id", event.Identifier(),
-				"event_type", event.Type(),
-				"error", err)
 			errs = append(errs, err)
 		}
 	}
