@@ -15,7 +15,7 @@ import (
 
 const topic = "captain-compose/v1/commands"
 
-type Listener struct {
+type listener struct {
 	client   mqtt.Client
 	decoders []message.Decoder
 	router   command.Router
@@ -26,13 +26,13 @@ func NewListener(
 	client mqtt.Client,
 	router command.Router,
 	logger *slog.Logger,
-) *Listener {
+) *listener {
 	decoders := []message.Decoder{
 		createdeployment.NewDecoder(),
 		removedeployment.NewDecoder(),
 	}
 
-	return &Listener{
+	return &listener{
 		client:   client,
 		decoders: decoders,
 		router:   router,
@@ -40,7 +40,7 @@ func NewListener(
 	}
 }
 
-func (l *Listener) Listen(ctx context.Context) error {
+func (l *listener) Listen(ctx context.Context) error {
 	l.logger.Info("MQTT listener starting", "topic", topic)
 
 	token := l.client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
