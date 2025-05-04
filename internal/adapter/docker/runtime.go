@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/glacius-labs/captain-compose/internal/core/deployment"
+	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
 )
 
 type runtime struct {

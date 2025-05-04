@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/glacius-labs/captain-compose/internal/core/deployment"
+	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
 	"github.com/google/uuid"
 )
 
