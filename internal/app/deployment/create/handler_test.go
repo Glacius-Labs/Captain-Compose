@@ -20,7 +20,7 @@ func newCommand() create.Command {
 	}
 }
 
-func Test_Handle_DeployFails_And_PublishFails(t *testing.T) {
+func TestHandle_DeployFailsAndPublishFails(t *testing.T) {
 	runtime := &mock.Runtime{DeployErr: errors.New("deployment failed")}
 	publisher := &mock.Publisher{Err: errors.New("publish failed")}
 
@@ -39,7 +39,7 @@ func Test_Handle_DeployFails_And_PublishFails(t *testing.T) {
 	assert.Equal(t, "web", publisher.Calls[0].Event.Name)
 }
 
-func Test_Handle_DeployFails_And_PublishSucceeds(t *testing.T) {
+func TestHandle_DeployFailsAndPublishSucceeds(t *testing.T) {
 	runtime := &mock.Runtime{DeployErr: errors.New("deployment failed")}
 	publisher := &mock.Publisher{}
 
@@ -55,7 +55,7 @@ func Test_Handle_DeployFails_And_PublishSucceeds(t *testing.T) {
 	assert.Len(t, publisher.Calls, 1)
 }
 
-func Test_Handle_DeploySucceeds_And_PublishFails(t *testing.T) {
+func TestHandle_DeploySucceedsAndPublishFails(t *testing.T) {
 	runtime := &mock.Runtime{}
 	publisher := &mock.Publisher{Err: errors.New("publish failed")}
 
@@ -71,7 +71,7 @@ func Test_Handle_DeploySucceeds_And_PublishFails(t *testing.T) {
 	assert.Len(t, publisher.Calls, 1)
 }
 
-func Test_Handle_DeploySucceeds_And_PublishSucceeds(t *testing.T) {
+func TestHandle_DeploySucceedsAndPublishSucceeds(t *testing.T) {
 	runtime := &mock.Runtime{}
 	publisher := &mock.Publisher{}
 

@@ -18,7 +18,7 @@ func newCommand() remove.Command {
 	}
 }
 
-func Test_Handle_RemoveFails_And_PublishFails(t *testing.T) {
+func TestHandle_RemoveFailsAndPublishFails(t *testing.T) {
 	runtime := &mock.Runtime{RemoveErr: errors.New("remove failed")}
 	publisher := &mock.Publisher{Err: errors.New("publish failed")}
 
@@ -36,7 +36,7 @@ func Test_Handle_RemoveFails_And_PublishFails(t *testing.T) {
 	assert.Equal(t, "test-service", publisher.Calls[0].Event.Name)
 }
 
-func Test_Handle_RemoveFails_And_PublishSucceeds(t *testing.T) {
+func TestHandle_RemoveFailsAndPublishSucceeds(t *testing.T) {
 	runtime := &mock.Runtime{RemoveErr: errors.New("remove failed")}
 	publisher := &mock.Publisher{}
 
@@ -52,7 +52,7 @@ func Test_Handle_RemoveFails_And_PublishSucceeds(t *testing.T) {
 	assert.Len(t, publisher.Calls, 1)
 }
 
-func Test_Handle_RemoveSucceeds_And_PublishFails(t *testing.T) {
+func TestHandle_RemoveSucceedsAndPublishFails(t *testing.T) {
 	runtime := &mock.Runtime{}
 	publisher := &mock.Publisher{Err: errors.New("publish failed")}
 
@@ -68,7 +68,7 @@ func Test_Handle_RemoveSucceeds_And_PublishFails(t *testing.T) {
 	assert.Len(t, publisher.Calls, 1)
 }
 
-func Test_Handle_RemoveSucceeds_And_PublishSucceeds(t *testing.T) {
+func TestHandle_RemoveSucceedsAndPublishSucceeds(t *testing.T) {
 	runtime := &mock.Runtime{}
 	publisher := &mock.Publisher{}
 
