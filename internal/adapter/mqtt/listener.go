@@ -64,7 +64,10 @@ func (l *Listener) handleMessage(ctx context.Context, msg mqtt.Message) {
 		}
 		if err := l.app.Deployment.Create.Handle(ctx, cmd); err != nil {
 			l.logger.Error("Create command failed", "error", err, "name", cmd.Name)
+			return
 		}
+		l.logger.Info("Create command succeeded", "name", cmd.Name)
+
 	case TypeRemove:
 		var cmd remove.Command
 		if err := json.Unmarshal(env.Data, &cmd); err != nil {
@@ -73,7 +76,10 @@ func (l *Listener) handleMessage(ctx context.Context, msg mqtt.Message) {
 		}
 		if err := l.app.Deployment.Remove.Handle(ctx, cmd); err != nil {
 			l.logger.Error("Remove command failed", "error", err, "name", cmd.Name)
+			return
 		}
+		l.logger.Info("Remove command succeeded", "name", cmd.Name)
+
 	default:
 		l.logger.Warn("Unknown command type", "type", env.Type)
 	}
