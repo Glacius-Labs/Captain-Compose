@@ -2,7 +2,9 @@ package create
 
 import (
 	"context"
+	"errors"
 
+	"github.com/glacius-labs/captain-compose/internal/app/deployment/shared"
 	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
 )
 
@@ -16,16 +18,23 @@ func NewHandler(runtime deployment.Runtime, publisher deployment.Publisher) *Han
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) error {
-	d := deployment.Deployment{Name: cmd.Name}
+	depl := deployment.Deployment{Name: cmd.Name}
 
-	if err := h.runtime.Deploy(ctx, d, cmd.Payload); err != nil {
+	if err := h.runtime.Deploy(ctx, depl, cmd.Payload); err != nil {
 		event := deployment.NewCreationFailedEvent(cmd.Name, err)
 
-		_ = h.publisher.Publish(ctx, event)
-		return err
+		if pubErr := h.publisher.Publish(ctx, event); pubErr != nil {
+			wrapped := shared.NewPublishEventFailed(pubErr)
+			return NewDeploymentFailed(errors.Join(err, wrapped))
+		}
+
+		return NewDeploymentFailed(err)
 	}
 
 	event := deployment.NewCreatedEvent(cmd.Name)
+	if err := h.publisher.Publish(ctx, event); err != nil {
+		return shared.NewPublishEventFailed(err)
+	}
 
-	return h.publisher.Publish(ctx, event)
+	return nil
 }

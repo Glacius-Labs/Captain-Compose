@@ -8,9 +8,9 @@ import (
 )
 
 type Publisher struct {
-	mu          sync.Mutex
-	PublishFunc func(ctx context.Context, event deployment.Event) error
-	Calls       []PublishCall
+	mu    sync.Mutex
+	Calls []PublishCall
+	Err   error
 }
 
 type PublishCall struct {
@@ -20,26 +20,14 @@ type PublishCall struct {
 
 func (m *Publisher) Publish(ctx context.Context, event deployment.Event) error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.Calls = append(m.Calls, PublishCall{Ctx: ctx, Event: event})
-	m.mu.Unlock()
-
-	if m.PublishFunc != nil {
-		return m.PublishFunc(ctx, event)
-	}
-	return nil
+	return m.Err
 }
 
-func (m *Publisher) CallsCount() int {
+func (m *Publisher) CalledOnce() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return len(m.Calls)
-}
-
-func (m *Publisher) LastCall() (PublishCall, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.Calls) == 0 {
-		return PublishCall{}, false
-	}
-	return m.Calls[len(m.Calls)-1], true
+	return len(m.Calls) == 1
 }
