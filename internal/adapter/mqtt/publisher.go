@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
@@ -13,14 +12,12 @@ import (
 type Publisher struct {
 	topic  string
 	client mqtt.Client
-	logger *slog.Logger
 }
 
-func NewPublisher(topic string, client mqtt.Client, logger *slog.Logger) *Publisher {
+func NewPublisher(topic string, client mqtt.Client) *Publisher {
 	return &Publisher{
 		topic:  topic,
 		client: client,
-		logger: logger,
 	}
 }
 
@@ -34,15 +31,6 @@ func (p *Publisher) Publish(ctx context.Context, event deployment.Event) error {
 	if token.Wait() && token.Error() != nil {
 		return fmt.Errorf("failed to publish event to topic %q: %w", p.topic, token.Error())
 	}
-
-	p.logger.Debug("Published event",
-		"topic", p.topic,
-		"id", event.ID,
-		"action", event.Action,
-		"name", event.Name,
-		"success", event.Success,
-		"message", event.Message,
-	)
 
 	return nil
 }

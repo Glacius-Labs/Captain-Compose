@@ -1,0 +1,20 @@
+mqtt:
+  broker_url: "tcp://localhost:1883"
+  client_id: "captain-compose"
+  username: ""        # optional
+  password: ""        # optional
+
+  tls:
+    enable: false   # set true to enable TLS
+    ca_cert_path: ""    # path to your CA cert (optional)
+    client_cert_path: "" # path to client cert (optional)
+    client_key_path: ""  # path to client key (optional)
+    insecure_skip_verify: false # only for development/testing
+
+log:
+  level: "info"        # debug, info, warn, error
+  format: "text"       # text or json
+  file_path: "./captain-compose.log" # optional log file
+
+listener_topic: "captain-compose/commands"
+publisher_topic: "captain-compose/events"
