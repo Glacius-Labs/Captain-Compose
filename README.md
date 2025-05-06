@@ -1,6 +1,6 @@
 # Captain Compose
 
-**Captain Compose** is a lightweight deployment agent that applies `docker-compose.yaml` files using the Docker engine.
+**Captain Compose** is a lightweight deployment agent that listens for deployment instructions (e.g. via MQTT) and applies docker-compose.yaml files using the Docker engine.
 
 ![Captain Compose Banner](captain-compose-banner.png)
 
