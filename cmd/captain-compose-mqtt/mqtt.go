@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -16,7 +17,14 @@ func SetupMQTT(cfg MQTTConfig) (mqtt.Client, error) {
 		SetClientID(cfg.ClientID).
 		SetUsername(cfg.Username).
 		SetPassword(cfg.Password).
-		SetConnectTimeout(5 * time.Second)
+		SetConnectTimeout(5 * time.Second).
+		SetAutoReconnect(true).
+		SetConnectionLostHandler(func(c mqtt.Client, err error) {
+			slog.Warn("MQTT connection lost", "error", err)
+		}).
+		SetOnConnectHandler(func(c mqtt.Client) {
+			slog.Info("MQTT reconnected")
+		})
 
 	if cfg.TLS.Enable {
 		tlsCfg, err := newTLSConfig(cfg.TLS)
