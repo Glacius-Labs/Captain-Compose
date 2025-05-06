@@ -52,6 +52,9 @@ cp config/mqtt/config.example.yaml config/mqtt/config.yaml
 Edit the values as needed:
 
 ```yaml
+listener_topic: "captain-compose/commands"
+publisher_topic: "captain-compose/events"
+
 mqtt:
   broker_url: "tcp://localhost:1883"
   client_id: "captain-compose"
@@ -69,9 +72,6 @@ log:
   level: "info"
   format: "text"
   file_path: "./captain-compose.log"
-
-listener_topic: "captain-compose/commands"
-publisher_topic: "captain-compose/events"
 ```
 
 ### 3. Run
