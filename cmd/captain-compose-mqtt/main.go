@@ -18,7 +18,8 @@ func main() {
 	if err := SetupLogger(cfg.Log); err != nil {
 		panic(fmt.Sprintf("failed to setup logger: %v", err))
 	}
-	slog.Info("Logger initialized")
+
+	slog.Info("Starting Captain Compose MQTT...")
 
 	rt, err := docker.NewRuntime()
 	if err != nil {
@@ -45,4 +46,6 @@ func main() {
 	} else {
 		slog.Info("Listener exited cleanly")
 	}
+
+	slog.Info("Captain Compose MQTT stopped")
 }
