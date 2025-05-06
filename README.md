@@ -82,8 +82,6 @@ publisher_topic: "captain-compose/events"
 
 By default, it loads config from `config.yaml`.
 
----
-
 ## 🔁 MQTT Payload Format
 
 ### Create a deployment
