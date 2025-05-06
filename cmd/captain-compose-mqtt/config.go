@@ -15,11 +15,11 @@ type Config struct {
 }
 
 type MQTTConfig struct {
-	BrokerURL string     `yaml:"broker_url"`
-	ClientID  string     `yaml:"client_id"`
-	Username  string     `yaml:"username"`
-	Password  string     `yaml:"password"`
-	TLS       *TLSConfig `yaml:"tls"` // optional TLS settings
+	BrokerURL string    `yaml:"broker_url"`
+	ClientID  string    `yaml:"client_id"`
+	Username  string    `yaml:"username"`
+	Password  string    `yaml:"password"`
+	TLS       TLSConfig `yaml:"tls"`
 }
 
 type TLSConfig struct {

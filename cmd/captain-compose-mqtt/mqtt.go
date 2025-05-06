@@ -18,8 +18,8 @@ func SetupMQTT(cfg MQTTConfig) (mqtt.Client, error) {
 		SetPassword(cfg.Password).
 		SetConnectTimeout(5 * time.Second)
 
-	if cfg.TLS != nil && cfg.TLS.Enable {
-		tlsCfg, err := newTLSConfig(*cfg.TLS)
+	if cfg.TLS.Enable {
+		tlsCfg, err := newTLSConfig(cfg.TLS)
 		if err != nil {
 			return nil, fmt.Errorf("setup TLS config: %w", err)
 		}

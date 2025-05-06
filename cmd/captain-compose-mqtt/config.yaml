@@ -4,7 +4,7 @@ mqtt:
   username: ""        # optional
   password: ""        # optional
 
-  tls:
+  tls: # TLS configuration (optional)
     enable: false   # set true to enable TLS
     ca_cert_path: ""    # path to your CA cert (optional)
     client_cert_path: "" # path to client cert (optional)
