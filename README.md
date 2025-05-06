@@ -6,15 +6,11 @@
   <img src="captain-compose.png" alt="Captain Compose Mascot" width="30%" />
 </div>
 
----
-
 ## 📦 What Is It?
 
 Captain Compose runs as a small background agent that listens for deployment instructions — currently via **MQTT** — and applies `docker-compose` workloads dynamically.
 
 It is designed for **distributed systems**, **edge environments**, or **air-gapped nodes** that need to receive and execute deployment tasks remotely.
-
----
 
 ## ✨ Features
 
@@ -25,8 +21,6 @@ It is designed for **distributed systems**, **edge environments**, or **air-gapp
 - 📂 Logs to both stdout and file (via `slog`)
 - 🚀 Precompiled binary available (see below)
 
----
-
 ## 🧪 MQTT Edition
 
 The first binary edition is `captain-compose-mqtt`, which listens to MQTT topics for commands like:
@@ -35,8 +29,6 @@ The first binary edition is `captain-compose-mqtt`, which listens to MQTT topics
 - `remove` → tear it down
 
 If you need support for another source (e.g. HTTP, filesystem, etc.), feel free to [open an issue](https://github.com/your-org/captain-compose/issues) or contribute it!
-
----
 
 ## 🧰 Quick Start
 
@@ -117,8 +109,6 @@ By default, it loads config from `config.yaml`.
 }
 ```
 
----
-
 ## 🧩 Want to Add Other Input Sources?
 
 This repository is modular. If you'd like to add another edition (like `captain-compose-http` or `captain-compose-fs`), feel free to:
@@ -129,13 +119,9 @@ This repository is modular. If you'd like to add another edition (like `captain-
 
 Let’s make `docker-compose` a controllable workload in any environment.
 
----
-
 ## 📄 License
 
 MIT
-
----
 
 ## 🤝 Contributing
 
