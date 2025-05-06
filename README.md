@@ -26,8 +26,6 @@ The first binary edition is `captain-compose-mqtt`, which listens to MQTT topics
 - `create` → apply a docker-compose deployment
 - `remove` → tear it down
 
-If you need support for another source (e.g. HTTP, filesystem, etc.), feel free to [open an issue](https://github.com/your-org/captain-compose/issues) or contribute it!
-
 ## 🧰 Quick Start
 
 ### 1. Download the Binary
@@ -114,10 +112,6 @@ This repository is modular. If you'd like to add another edition (like `captain-
 - Follow the same structure as the MQTT version
 
 Let’s make `docker-compose` a controllable workload in any environment.
-
-## 📄 License
-
-MIT
 
 ## 🤝 Contributing
 
