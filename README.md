@@ -2,9 +2,7 @@
 
 **Captain Compose** is a lightweight deployment agent that applies `docker-compose.yaml` files using the Docker engine.
 
-<div align="center">
-  <img src="captain-compose.png" alt="Captain Compose Mascot" width="30%" />
-</div>
+![Captain Compose Banner](captain-compose-banner.png)
 
 ## 📦 What Is It?
 
