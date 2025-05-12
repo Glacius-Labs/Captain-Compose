@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
 	"github.com/google/uuid"
@@ -11,6 +12,7 @@ import (
 
 type store struct {
 	tempDirs []string
+	mu       sync.Mutex
 }
 
 func newStore() *store {
@@ -20,6 +22,9 @@ func newStore() *store {
 }
 
 func (s *store) save(d deployment.Deployment, payload []byte) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	id := uuid.NewString()
 	dirName := fmt.Sprintf("%s-%s", d.Name, id)
 
