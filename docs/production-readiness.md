@@ -27,11 +27,22 @@ acceptance. It is not a claim that an unspecified production host has been deplo
 
 ## GitHub verification
 
-The branch CI verifies race tests on Linux/macOS/Windows, Docker and MQTT integration,
-formatting, module consistency, vulnerability scanning, shell lint, installation and
-all six release archives. A real systemd service is provisioned twice on a disposable
-runner and processes a correlated MQTT smoke command. Live run evidence will be
-recorded after the branch run.
+[GitHub Actions run 36712417655](https://github.com/Glacius-Labs/Captain-Compose/actions/runs/36712417655)
+passed all five jobs for implementation commit `9d4357c` on 2026-09-30:
+
+- Race tests, vet and build on Linux, Windows and macOS.
+- Real Docker lifecycle and MQTT broker-restart integration with the race detector.
+- Formatting/module checks and vulnerability scanning.
+- Shell lint, successful offline installation and rejection of a corrupted archive.
+- All six Linux/macOS/Windows amd64/arm64 release archives and their checksums.
+- Linux packaged-binary smoke test; systemd provisioning/start performed twice;
+  installed service processed an MQTT command and emitted the matching success event.
+
+The first Windows run exposed PowerShell splitting an unquoted coverage argument;
+the corrected workflow passed. Local integration also exposed missing Windows Docker
+plugin environment variables and an unstable ephemeral broker port; both were fixed
+before this verified run. These findings are recorded to explain the earlier failed
+runs, not as unresolved defects.
 
 ## Release and production acceptance
 
