@@ -11,9 +11,10 @@ for os in linux darwin windows; do
     binary=captain-compose-mqtt
     [[ "$os" != windows ]] || binary+=.exe
     CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X main.version=$version -X main.commit=$commit -X main.buildDate=$date" -o "$stage/$binary" ./cmd/captain-compose-mqtt
-    cp LICENSE README.md config/mqtt/config.example.yaml "$stage/"
-    cp scripts/install.sh scripts/provision.sh "$stage/"
-    cp -R docs "$stage/"
+    cp LICENSE README.md SECURITY.md CONTRIBUTING.md "$stage/"
+    mkdir -p "$stage/scripts"
+    cp scripts/install.sh scripts/provision.sh "$stage/scripts/"
+    cp -R docs config "$stage/"
     archive="captain-compose_${version}_${os}_${arch}"
     if [[ "$os" == windows ]]; then
       (cd "$stage" && zip -qr "$OLDPWD/dist/$archive.zip" .)

@@ -29,7 +29,9 @@ acceptance. It is not a claim that an unspecified production host has been deplo
 
 The branch CI verifies race tests on Linux/macOS/Windows, Docker and MQTT integration,
 formatting, module consistency, vulnerability scanning, shell lint, installation and
-all six release archives. Live run evidence will be recorded after the branch run.
+all six release archives. A real systemd service is provisioned twice on a disposable
+runner and processes a correlated MQTT smoke command. Live run evidence will be
+recorded after the branch run.
 
 ## Release and production acceptance
 

@@ -67,6 +67,7 @@ UNIT
 systemctl daemon-reload
 systemctl enable captain-compose.service
 if "$start"; then
+  systemctl stop captain-compose.service
   (cd /var/lib/captain-compose && runuser -u captain-compose -- /usr/local/bin/captain-compose-mqtt --config /etc/captain-compose/config.yaml --check)
   systemctl restart captain-compose.service
   systemctl is-active --quiet captain-compose.service

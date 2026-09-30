@@ -73,8 +73,16 @@ jobs:
           (cd dist && sha256sum --check checksums.txt)
       - name: Verify systemd provisioning on disposable runner
         run: |
+          trap 'sudo systemctl stop captain-compose.service || true; docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml down --volumes' EXIT
           sudo install -m 0755 smoke/captain-compose-mqtt /usr/local/bin/captain-compose-mqtt
-          sudo bash scripts/provision.sh --config config/mqtt/production.example.yaml
-          sudo bash scripts/provision.sh --config config/mqtt/production.example.yaml
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml up -d
+          sudo bash scripts/provision.sh --config config/mqtt/config.example.yaml --start
+          sudo bash scripts/provision.sh --config config/mqtt/config.example.yaml --start
           sudo systemd-analyze verify /etc/systemd/system/captain-compose.service
           sudo systemctl is-enabled captain-compose.service
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml exec -T mosquitto mosquitto_sub -t captain-compose/dev-node/events -q 1 -C 1 -W 20 > service-event.json &
+          subscriber=$!
+          sleep 2
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml exec -T mosquitto mosquitto_pub -t captain-compose/dev-node/commands -q 1 -m '{"id":"5420f0a0-91f8-4cae-baf6-b28936e4e1b5","type":"remove","data":{"name":"service-smoke"}}'
+          wait "$subscriber"
+          jq -e '.success == true and .request_id == "5420f0a0-91f8-4cae-baf6-b28936e4e1b5"' service-event.json

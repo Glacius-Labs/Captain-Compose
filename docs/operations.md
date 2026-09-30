@@ -9,10 +9,11 @@ open firewall ports, create cloud resources, or alter existing workloads.
 
 ## Install a release
 
-Download `install.sh` from a reviewed repository tag or a release archive, then:
+Download `scripts/install.sh` from a reviewed repository tag or extract a release
+archive, then run from its root:
 
 ```bash
-bash install.sh --version 1.0.0 --prefix "$HOME/.local/bin"
+bash scripts/install.sh --version 1.0.0 --prefix "$HOME/.local/bin"
 captain-compose-mqtt --version
 ```
 
@@ -50,7 +51,9 @@ sudo journalctl -u captain-compose.service -f
 Provisioning is repeatable: it preserves existing configuration, creates the system
 user, grants Docker group access, installs the unit, and enables it. Starting is
 explicit. The unit restarts failed processes and stops the agent on SIGTERM without
-tearing down workloads. Existing config edits require `systemctl restart`.
+tearing down workloads. `--start` stops any running agent before preflight to release
+its state lock, then restarts it. A failed preflight leaves the service stopped for
+repair. Existing config edits require `systemctl restart`.
 
 ## Configuration
 
