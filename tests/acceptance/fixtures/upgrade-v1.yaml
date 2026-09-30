@@ -1,0 +1,16 @@
+services:
+  web:
+    image: alpine:3.22
+    command:
+      - sh
+      - -c
+      - mkdir -p /pilot-data; test -f /pilot-data/marker || printf 'v1-data\n' > /pilot-data/marker; sleep 12; touch /tmp/pilot-ready; exec sleep 3600
+    volumes:
+      - pilot-data:/pilot-data
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/pilot-ready"]
+      interval: 1s
+      timeout: 1s
+      retries: 30
+volumes:
+  pilot-data: {}

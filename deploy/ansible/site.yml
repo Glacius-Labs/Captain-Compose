@@ -1,0 +1,6 @@
+---
+- name: Install and operate Captain Compose on dedicated Docker hosts
+  hosts: captain_compose
+  become: true
+  roles:
+    - captain_compose

@@ -1,0 +1,338 @@
+---
+- name: Check required variables and target platform
+  ansible.builtin.assert:
+    that:
+      - captain_compose_version is match('^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?$')
+      - captain_compose_config_source | length > 0
+      - captain_compose_state_directory == '/var/lib/captain-compose'
+      - captain_compose_config_directory == '/etc/captain-compose'
+      - ansible_distribution == 'Ubuntu'
+      - ansible_distribution_version is version('24.04', '>=')
+      - ansible_architecture in ['x86_64', 'amd64', 'aarch64', 'arm64']
+    fail_msg: "Set a release version and captain_compose_config_source; this role supports Ubuntu 24.04 or newer."
+
+- name: Collect current service state
+  ansible.builtin.service_facts:
+
+- name: Remember whether the service is active
+  ansible.builtin.set_fact:
+    captain_compose_service_was_active: "{{ (ansible_facts.services['captain-compose.service'] | default({})).state | default('') == 'running' }}"
+
+- name: Inspect protected directory paths before changing them
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /var
+    - /var/lib
+    - /etc
+    - "{{ captain_compose_state_directory }}"
+    - "{{ captain_compose_config_directory }}"
+    - "{{ captain_compose_config_directory }}/docker"
+  register: captain_compose_directory_stats
+
+- name: Reject symlinked state or configuration directories
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.islnk | default(false))
+      - not (item.stat.exists | default(false)) or (item.stat.isdir | default(false))
+    fail_msg: "State and configuration paths must be real directories, never symlinks."
+  loop: "{{ captain_compose_directory_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Validate explicitly managed credential file destinations
+  ansible.builtin.assert:
+    that:
+      - item.src | length > 0
+      - item.dest | length > 0
+      - not item.dest.startswith('/')
+      - "'..' not in item.dest.split('/')"
+      - item.dest != 'config.yaml'
+  loop: "{{ captain_compose_managed_secret_files }}"
+  no_log: true
+
+- name: Check Docker daemon connectivity
+  ansible.builtin.command:
+    argv: [docker, info]
+  register: captain_compose_docker_server
+  changed_when: false
+
+- name: Read installed Compose version
+  ansible.builtin.command:
+    argv: [docker, compose, version, --short]
+  register: captain_compose_compose_version
+  changed_when: false
+
+- name: Check Compose minimum version
+  ansible.builtin.assert:
+    that:
+      - (captain_compose_compose_version.stdout | regex_replace('^v', '')) is version(captain_compose_min_compose_version, '>=')
+    fail_msg: "Docker Compose {{ captain_compose_min_compose_version }} or newer is required."
+
+- name: Require gh when provenance verification is enabled
+  ansible.builtin.command: gh --version
+  register: captain_compose_gh_version
+  changed_when: false
+  when: captain_compose_verify_provenance
+
+- name: Derive release platform
+  ansible.builtin.set_fact:
+    captain_compose_release_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' }}"
+    captain_compose_release_archive: "captain-compose_{{ captain_compose_version }}_linux_{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'amd64' }}.tar.gz"
+
+- name: Create temporary release directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: captain-compose-release
+  register: captain_compose_release_tmp
+  changed_when: false
+
+- name: Download release archive
+  ansible.builtin.get_url:
+    url: "https://github.com/{{ captain_compose_release_repository }}/releases/download/v{{ captain_compose_version }}/{{ captain_compose_release_archive }}"
+    dest: "{{ captain_compose_release_tmp.path }}/{{ captain_compose_release_archive }}"
+    mode: '0600'
+    force: false
+  changed_when: false
+  when: captain_compose_archive_source | length == 0
+
+- name: Copy local archive fixture for controlled environments
+  ansible.builtin.copy:
+    src: "{{ captain_compose_archive_source }}"
+    dest: "{{ captain_compose_release_tmp.path }}/{{ captain_compose_release_archive }}"
+    mode: '0600'
+  when: captain_compose_archive_source | length > 0
+  changed_when: false
+
+- name: Download checksum manifest
+  ansible.builtin.get_url:
+    url: "https://github.com/{{ captain_compose_release_repository }}/releases/download/v{{ captain_compose_version }}/checksums.txt"
+    dest: "{{ captain_compose_release_tmp.path }}/checksums.txt"
+    mode: '0600'
+    force: false
+  when: captain_compose_checksums_source | length == 0
+  changed_when: false
+
+- name: Copy local checksum manifest for controlled environments
+  ansible.builtin.copy:
+    src: "{{ captain_compose_checksums_source }}"
+    dest: "{{ captain_compose_release_tmp.path }}/checksums.txt"
+    mode: '0600'
+  when: captain_compose_checksums_source | length > 0
+  changed_when: false
+
+- name: Check archive checksum against the published manifest
+  ansible.builtin.shell: |
+    set -eu
+    expected=$(awk -v name='{{ captain_compose_release_archive }}' '$2 == name || $2 == "*" name { n++; value=$1 } END { if (n == 1) print value }' checksums.txt)
+    test "${#expected}" -eq 64
+    printf '%s  %s\n' "$expected" '{{ captain_compose_release_archive }}' | sha256sum --check --status
+  args:
+    chdir: "{{ captain_compose_release_tmp.path }}"
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify release archive provenance
+  ansible.builtin.command:
+    argv: "{{ ['gh', 'attestation', 'verify', captain_compose_release_tmp.path + '/' + captain_compose_release_archive, '--repo', captain_compose_release_repository, '--signer-workflow', captain_compose_release_repository + '/.github/workflows/release.yml', '--source-ref', 'refs/tags/v' + captain_compose_version, '--deny-self-hosted-runners'] + (['--bundle', captain_compose_offline_attestation_bundle, '--custom-trusted-root', captain_compose_offline_trusted_root] if captain_compose_offline_attestation_bundle | length > 0 else []) }}"
+  changed_when: false
+  when: captain_compose_verify_provenance
+
+- name: Ensure service group and account exist
+  ansible.builtin.group:
+    name: "{{ captain_compose_group }}"
+    system: true
+
+- name: Ensure service user exists with Docker access
+  ansible.builtin.user:
+    name: "{{ captain_compose_user }}"
+    group: "{{ captain_compose_group }}"
+    groups: docker
+    append: true
+    system: true
+    home: "{{ captain_compose_state_directory }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+  register: captain_compose_user_account
+
+- name: Ensure private state directory
+  ansible.builtin.file:
+    path: "{{ captain_compose_state_directory }}"
+    state: directory
+    owner: "{{ captain_compose_user }}"
+    group: "{{ captain_compose_group }}"
+    mode: '0700'
+
+- name: Inspect existing configuration path
+  ansible.builtin.stat:
+    path: "{{ captain_compose_config_directory }}/config.yaml"
+  register: captain_compose_config_stat
+
+- name: Reject unsafe existing configuration destination
+  ansible.builtin.assert:
+    that:
+      - not (captain_compose_config_stat.stat.islnk | default(false))
+      - not (captain_compose_config_stat.stat.exists | default(false)) or (captain_compose_config_stat.stat.isreg | default(false))
+    fail_msg: "Configuration destination must be absent or a regular non-symlink file."
+
+- name: Ensure protected configuration and Docker credential directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ captain_compose_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ captain_compose_config_directory }}", mode: '0750' }
+    - { path: "{{ captain_compose_config_directory }}/docker", mode: '0750' }
+
+- name: Install initial configuration only when absent
+  ansible.builtin.copy:
+    src: "{{ captain_compose_config_source }}"
+    dest: "{{ captain_compose_config_directory }}/config.yaml"
+    owner: root
+    group: "{{ captain_compose_group }}"
+    mode: '0640'
+  when: not (captain_compose_config_stat.stat.exists | default(false))
+  register: captain_compose_initial_config
+  no_log: true
+
+- name: Keep existing configuration owner and permissions secure
+  ansible.builtin.file:
+    path: "{{ captain_compose_config_directory }}/config.yaml"
+    state: file
+    owner: root
+    group: "{{ captain_compose_group }}"
+    mode: '0640'
+  no_log: true
+
+- name: Install explicitly supplied Docker registry credentials
+  ansible.builtin.copy:
+    src: "{{ captain_compose_docker_config_source }}"
+    dest: "{{ captain_compose_config_directory }}/docker/config.json"
+    owner: root
+    group: "{{ captain_compose_group }}"
+    mode: '0640'
+  when: captain_compose_docker_config_source | length > 0
+  register: captain_compose_docker_config_copy
+  no_log: true
+
+- name: Install explicitly listed MQTT credential and TLS files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ captain_compose_config_directory }}/{{ item.dest }}"
+    owner: root
+    group: "{{ captain_compose_group }}"
+    mode: '0640'
+  loop: "{{ captain_compose_managed_secret_files }}"
+  register: captain_compose_managed_secret_copies
+  no_log: true
+
+- name: Stage verified release archive
+  ansible.builtin.unarchive:
+    src: "{{ captain_compose_release_tmp.path }}/{{ captain_compose_release_archive }}"
+    dest: "{{ captain_compose_release_tmp.path }}"
+    remote_src: true
+  changed_when: false
+
+- name: Compare staged binaries with the installed versions
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - "{{ captain_compose_release_tmp.path }}/captain-compose-mqtt"
+    - "{{ captain_compose_release_tmp.path }}/captain-compose"
+    - "{{ captain_compose_install_prefix }}/captain-compose-mqtt"
+    - "{{ captain_compose_install_prefix }}/captain-compose"
+  register: captain_compose_binary_stats
+
+- name: Decide whether the release changes installed binaries
+  ansible.builtin.set_fact:
+    captain_compose_binaries_changed: "{{ (captain_compose_binary_stats.results[0].stat.checksum | default('')) != (captain_compose_binary_stats.results[2].stat.checksum | default('')) or (captain_compose_binary_stats.results[1].stat.checksum | default('')) != (captain_compose_binary_stats.results[3].stat.checksum | default('')) }}"
+
+- name: Write systemd service unit
+  ansible.builtin.template:
+    src: service.service.j2
+    dest: /etc/systemd/system/captain-compose.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: captain_compose_unit_template
+
+- name: Determine whether configuration or unit content changed
+  ansible.builtin.set_fact:
+    captain_compose_service_needs_restart: "{{ captain_compose_binaries_changed or captain_compose_user_account.changed or (captain_compose_initial_config is defined and captain_compose_initial_config.changed) or (captain_compose_docker_config_copy is defined and captain_compose_docker_config_copy.changed) or (captain_compose_managed_secret_copies is defined and (captain_compose_managed_secret_copies.results | selectattr('changed') | list | length > 0)) or captain_compose_unit_template.changed }}"
+
+- name: Stop active service only when installed content changes or start is disabled
+  ansible.builtin.systemd:
+    name: captain-compose.service
+    state: stopped
+  when:
+    - captain_compose_service_was_active
+    - captain_compose_service_needs_restart or not captain_compose_start_service
+
+- name: Install Captain Compose binaries atomically
+  ansible.builtin.copy:
+    src: "{{ captain_compose_release_tmp.path }}/{{ item }}"
+    dest: "{{ captain_compose_install_prefix }}/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - captain-compose-mqtt
+    - captain-compose
+  register: captain_compose_binary_installs
+
+- name: Check installed binary versions
+  ansible.builtin.command:
+    argv: ["{{ captain_compose_install_prefix }}/{{ item }}", --version]
+  register: captain_compose_binary_versions
+  changed_when: false
+  loop:
+    - captain-compose-mqtt
+    - captain-compose
+
+- name: Require both installed binaries to match the pinned release
+  ansible.builtin.assert:
+    that:
+      - captain_compose_version in item.stdout
+    fail_msg: "An installed Captain Compose binary does not report release {{ captain_compose_version }}."
+  loop: "{{ captain_compose_binary_versions.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Reload systemd and enable service
+  ansible.builtin.systemd:
+    name: captain-compose.service
+    daemon_reload: true
+    enabled: true
+  register: captain_compose_systemd_reload
+  changed_when: captain_compose_unit_template.changed
+
+- name: Validate configuration and Docker access as the service user
+  ansible.builtin.command:
+    argv:
+      - "{{ captain_compose_install_prefix }}/captain-compose-mqtt"
+      - --config
+      - "{{ captain_compose_config_directory }}/config.yaml"
+      - --check
+  become_user: "{{ captain_compose_user }}"
+  environment:
+    DOCKER_CONFIG: "{{ captain_compose_config_directory }}/docker"
+  changed_when: false
+  no_log: true
+  when: not captain_compose_service_was_active or captain_compose_service_needs_restart
+
+- name: Start service when requested
+  ansible.builtin.systemd:
+    name: captain-compose.service
+    state: started
+  when: captain_compose_start_service
+  register: captain_compose_service_start
+
+- name: Remove temporary verified release files
+  ansible.builtin.file:
+    path: "{{ captain_compose_release_tmp.path }}"
+    state: absent
+  changed_when: false

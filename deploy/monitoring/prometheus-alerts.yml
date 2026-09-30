@@ -1,0 +1,28 @@
+groups:
+  - name: captain-compose
+    rules:
+      - alert: CaptainComposeUnavailable
+        expr: up{job="captain-compose"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "Captain Compose monitoring is unavailable"}
+      - alert: CaptainComposeBrokerDisconnected
+        expr: captain_compose_broker_connected == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Captain Compose cannot exchange commands/results"}
+      - alert: CaptainComposeDockerUnavailable
+        expr: captain_compose_docker_ready == 0 or captain_compose_observation_age_seconds > 60
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Docker observation failed or became stale"}
+      - alert: CaptainComposeResultDeliveryDelayed
+        expr: captain_compose_oldest_event_seconds > 120
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Deployment results are waiting for delivery"}
+      - alert: CaptainComposeWorkloadNeedsAttention
+        expr: captain_compose_drifted_deployments > 0 or captain_compose_unhealthy_services > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "A managed workload has drifted or is unhealthy"}

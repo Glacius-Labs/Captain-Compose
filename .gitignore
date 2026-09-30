@@ -27,8 +27,11 @@ go.work.sum
 # Local runtime, credentials, builds and test reports
 /state/
 /config.yaml
+/operator.yaml
+/*-request.json
 /dist/
 /bin/
+/.gocache/
 *.log
 coverage.*
 *.pem

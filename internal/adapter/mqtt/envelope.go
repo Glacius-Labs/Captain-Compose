@@ -1,6 +1,9 @@
 package mqtt
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
 	TypeCreate = "create"
@@ -8,7 +11,9 @@ const (
 )
 
 type Envelope struct {
-	ID   string          `json:"id"`
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
+	ID        string          `json:"id"`
+	Type      string          `json:"type"`
+	Version   int             `json:"version,omitempty"`
+	ExpiresAt *time.Time      `json:"expires_at,omitempty"`
+	Data      json.RawMessage `json:"data"`
 }

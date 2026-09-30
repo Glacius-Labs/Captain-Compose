@@ -1,0 +1,328 @@
+[
+  {
+    "name": "create",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo="
+      }
+    }
+  },
+  {
+    "name": "create-only",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo=",
+        "expected_revision": ""
+      }
+    }
+  },
+  {
+    "name": "plan",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "plan",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo=",
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "name": "status-all",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "status",
+      "data": {}
+    }
+  },
+  {
+    "name": "status-empty-name",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "status",
+      "data": {
+        "name": ""
+      }
+    }
+  },
+  {
+    "name": "status-one",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "status",
+      "data": {
+        "name": "web"
+      }
+    }
+  },
+  {
+    "name": "inspect",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "inspect",
+      "data": {
+        "name": "web"
+      }
+    }
+  },
+  {
+    "name": "doctor",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "doctor",
+      "data": {}
+    }
+  },
+  {
+    "name": "remove",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "remove",
+      "data": {
+        "name": "web",
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "name": "revert",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "revert",
+      "data": {
+        "name": "web",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "allow_data_risk": true
+      }
+    }
+  },
+  {
+    "name": "result",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "result",
+      "data": {
+        "request_id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731"
+      }
+    }
+  },
+  {
+    "name": "expires-create",
+    "valid": true,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo="
+      },
+      "expires_at": "2099-01-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "remove-empty-guard",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "remove",
+      "data": {
+        "name": "web",
+        "expected_revision": ""
+      }
+    }
+  },
+  {
+    "name": "revert-no-guard",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "revert",
+      "data": {
+        "name": "web",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "allow_data_risk": true
+      }
+    }
+  },
+  {
+    "name": "expiring-query",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "plan",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo="
+      },
+      "expires_at": "2099-01-01T00:00:00Z"
+    }
+  },
+  {
+    "name": "doctor-extra-name",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "doctor",
+      "data": {
+        "name": "web"
+      }
+    }
+  },
+  {
+    "name": "result-extra-name",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "result",
+      "data": {
+        "name": "web",
+        "request_id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731"
+      }
+    }
+  },
+  {
+    "name": "nil-request-id",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "00000000-0000-0000-0000-000000000000",
+      "type": "doctor",
+      "data": {}
+    }
+  },
+  {
+    "name": "nil-result-id",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "result",
+      "data": {
+        "request_id": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  },
+  {
+    "name": "null-version",
+    "valid": false,
+    "command": {
+      "version": null,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo="
+      }
+    }
+  },
+  {
+    "name": "null-expiry",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "c2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OmFscGluZQo="
+      },
+      "expires_at": null
+    }
+  },
+  {
+    "name": "null-data",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "doctor",
+      "data": null
+    }
+  },
+  {
+    "name": "empty-payload",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": ""
+      }
+    }
+  },
+  {
+    "name": "invalid-base64",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "%%%="
+      }
+    }
+  },
+  {
+    "name": "noncanonical-base64-pad-bits",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "create",
+      "data": {
+        "name": "web",
+        "payload": "AB=="
+      }
+    }
+  },
+  {
+    "name": "unknown-field",
+    "valid": false,
+    "command": {
+      "version": 2,
+      "id": "673fca08-5e71-45f9-bfe3-4cb9b79c4731",
+      "type": "doctor",
+      "data": {},
+      "surprise": true
+    }
+  }
+]
