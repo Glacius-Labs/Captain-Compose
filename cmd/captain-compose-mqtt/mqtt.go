@@ -8,65 +8,52 @@ import (
 	"os"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
-func SetupMQTT(cfg MQTTConfig) (mqtt.Client, error) {
-	opts := mqtt.NewClientOptions().
-		AddBroker(cfg.BrokerURL).
-		SetClientID(cfg.ClientID).
-		SetUsername(cfg.Username).
-		SetPassword(cfg.Password).
-		SetConnectTimeout(5 * time.Second).
-		SetAutoReconnect(true).
-		SetConnectionLostHandler(func(c mqtt.Client, err error) {
-			slog.Warn("MQTT connection lost", "error", err)
-		}).
-		SetOnConnectHandler(func(c mqtt.Client) {
-			slog.Info("MQTT reconnected")
-		})
-
-	if cfg.TLS.Enable {
-		tlsCfg, err := newTLSConfig(cfg.TLS)
-		if err != nil {
-			return nil, fmt.Errorf("setup TLS config: %w", err)
-		}
-		opts.SetTLSConfig(tlsCfg)
+func mqttOptions(cfg MQTTConfig) (*paho.ClientOptions, error) {
+	tlsCfg, err := newTLSConfig(cfg.TLS)
+	if err != nil {
+		return nil, err
 	}
-
-	client := mqtt.NewClient(opts)
-	token := client.Connect()
-	if token.Wait() && token.Error() != nil {
-		return nil, fmt.Errorf("failed to connect to MQTT broker: %w", token.Error())
-	}
-
-	return client, nil
+	opts := paho.NewClientOptions().AddBroker(cfg.BrokerURL).SetClientID(cfg.ClientID).
+		SetUsername(cfg.Username).SetPassword(cfg.Password).SetTLSConfig(tlsCfg).
+		SetCleanSession(false).SetAutoAckDisabled(true).SetOrderMatters(true).
+		SetConnectTimeout(10 * time.Second).SetWriteTimeout(10 * time.Second).
+		SetKeepAlive(30 * time.Second).SetPingTimeout(10 * time.Second).
+		SetAutoReconnect(true).SetMaxReconnectInterval(30 * time.Second).
+		SetConnectionLostHandler(func(_ paho.Client, _ error) { slog.Warn("MQTT connection lost; reconnecting") })
+	return opts, nil
 }
 
 func newTLSConfig(cfg TLSConfig) (*tls.Config, error) {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: cfg.InsecureSkipVerify,
+	if cfg.InsecureSkipVerify {
+		return nil, fmt.Errorf("TLS certificate verification cannot be disabled")
 	}
-
+	if (cfg.ClientCertPath == "") != (cfg.ClientKeyPath == "") {
+		return nil, fmt.Errorf("TLS certificate and key must be configured together")
+	}
+	t := &tls.Config{MinVersion: tls.VersionTLS12}
 	if cfg.CACertPath != "" {
-		caCert, err := os.ReadFile(cfg.CACertPath)
+		b, err := os.ReadFile(cfg.CACertPath)
 		if err != nil {
-			return nil, fmt.Errorf("read CA cert: %w", err)
+			return nil, fmt.Errorf("read CA certificate: %w", err)
 		}
-		caPool := x509.NewCertPool()
-		if !caPool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("invalid CA cert file")
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			pool = x509.NewCertPool()
 		}
-		tlsConfig.RootCAs = caPool
+		if !pool.AppendCertsFromPEM(b) {
+			return nil, fmt.Errorf("invalid CA certificate")
+		}
+		t.RootCAs = pool
 	}
-
-	if cfg.ClientCertPath != "" && cfg.ClientKeyPath != "" {
+	if cfg.ClientCertPath != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.ClientCertPath, cfg.ClientKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("load client cert/key: %w", err)
+			return nil, fmt.Errorf("load client certificate: %w", err)
 		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
+		t.Certificates = []tls.Certificate{cert}
 	}
-
-	return tlsConfig, nil
+	return t, nil
 }

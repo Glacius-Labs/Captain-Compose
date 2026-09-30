@@ -1,6 +1,6 @@
 package create
 
 type Command struct {
-	Name    string
-	Payload []byte
+	Name    string `json:"name"`
+	Payload []byte `json:"payload"`
 }

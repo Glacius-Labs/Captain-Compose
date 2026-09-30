@@ -4,49 +4,68 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
-	"github.com/google/uuid"
 )
 
-type store struct {
-	tempDirs []string
-	mu       sync.Mutex
+// The entrypoint holds an OS file lock. OpenRoot confines manifest access.
+type store struct{ root *os.Root }
+
+func newStore(dir string) (*store, error) {
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, err
+	}
+	r, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &store{root: r}, nil
 }
 
-func newStore() *store {
-	return &store{
-		tempDirs: make([]string, 0),
+func (s *store) path(name string) (string, error) {
+	if err := deployment.ValidateName(name); err != nil {
+		return "", err
 	}
+	return filepath.Join(name, "compose.json"), nil
 }
 
 func (s *store) save(d deployment.Deployment, payload []byte) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	id := uuid.NewString()
-	dirName := fmt.Sprintf("%s-%s", d.Name, id)
-
-	dir, err := os.MkdirTemp("", dirName)
+	p, err := s.path(d.Name)
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %w", err)
+		return "", err
 	}
-
-	composeFile := filepath.Join(dir, "docker-compose.yaml")
-	if err := os.WriteFile(composeFile, payload, 0600); err != nil {
-		_ = os.RemoveAll(dir)
-		return "", fmt.Errorf("failed to write compose file: %w", err)
+	if err := s.root.MkdirAll(d.Name, 0700); err != nil {
+		return "", err
 	}
-
-	s.tempDirs = append(s.tempDirs, dir)
-
-	return composeFile, nil
+	f, err := s.root.OpenFile(p+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", err
+	}
+	_, writeErr := f.Write(payload)
+	if writeErr == nil {
+		writeErr = f.Sync()
+	}
+	closeErr := f.Close()
+	if writeErr != nil {
+		return "", writeErr
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	if err := s.root.Rename(p+".tmp", p); err != nil {
+		return "", err
+	}
+	return filepath.Join(s.root.Name(), p), nil
 }
 
-func (s *store) cleanup() {
-	for _, dir := range s.tempDirs {
-		_ = os.RemoveAll(dir)
+func (s *store) read(name string) ([]byte, error) {
+	p, err := s.path(name)
+	if err != nil {
+		return nil, err
 	}
-	s.tempDirs = nil
+	b, err := s.root.ReadFile(p)
+	if err != nil {
+		return nil, fmt.Errorf("read managed deployment %q: %w", name, err)
+	}
+	return b, nil
 }

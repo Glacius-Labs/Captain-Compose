@@ -1,40 +1,39 @@
-name: Build and Release Binaries
-
+name: Release
 on:
   push:
-    tags:
-      - 'v*'
-
+    tags: ['v*']
+permissions:
+  contents: read
 jobs:
-  build:
+  verify:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
     permissions:
       contents: write
-
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          go-version: '1.21'
-
-      - name: Build for Linux
-        run: GOOS=linux GOARCH=amd64 go build -o captain-compose-mqtt-linux ./cmd/captain-compose-mqtt
-
-      - name: Build for macOS
-        run: GOOS=darwin GOARCH=amd64 go build -o captain-compose-mqtt-darwin ./cmd/captain-compose-mqtt
-
-      - name: Build for Windows
-        run: GOOS=windows GOARCH=amd64 go build -o captain-compose-mqtt.exe ./cmd/captain-compose-mqtt
-
-      - name: Upload binaries to release
-        uses: softprops/action-gh-release@v2
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Require release commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          files: |
-            captain-compose-mqtt-linux
-            captain-compose-mqtt-darwin
-            captain-compose-mqtt.exe
+          go-version-file: go.mod
+      - name: Build release archives
+        run: bash scripts/release.sh "${GITHUB_REF_NAME#v}"
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: dist/*
+      - name: Publish draft release for final review
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft --generate-notes --title "Captain Compose $GITHUB_REF_NAME"

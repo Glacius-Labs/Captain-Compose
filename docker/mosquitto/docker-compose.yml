@@ -1,13 +1,11 @@
-version: "3.8"
-
 services:
   mosquitto:
-    image: eclipse-mosquitto:2
-    container_name: mosquitto
+    image: eclipse-mosquitto:2.0.22
     ports:
-      - "1883:1883"
+      - "127.0.0.1:1883:1883"
     volumes:
-      - ./config:/mosquitto/config
-      - ./data:/mosquitto/data
-      - ./log:/mosquitto/log
+      - ./config:/mosquitto/config:ro
+      - broker-data:/mosquitto/data
     restart: unless-stopped
+volumes:
+  broker-data:

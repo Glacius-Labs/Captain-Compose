@@ -23,3 +23,13 @@ go.work.sum
 
 # env file
 .env
+
+# Local runtime, credentials, builds and test reports
+/state/
+/config.yaml
+/dist/
+/bin/
+*.log
+coverage.*
+*.pem
+*.key

@@ -8,6 +8,7 @@ import (
 )
 
 type Event struct {
+	RequestID string            `json:"request_id,omitempty"`
 	ID        uuid.UUID         `json:"id"`
 	Timestamp time.Time         `json:"timestamp"`
 	Action    string            `json:"action"`
