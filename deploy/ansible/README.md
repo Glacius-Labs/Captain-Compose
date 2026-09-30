@@ -19,7 +19,7 @@ agent-01 ansible_host=192.0.2.10
 Example variables (store secrets with Ansible Vault):
 
 ```yaml
-captain_compose_version: 1.1.0
+captain_compose_version: 1.1.0-rc.1
 captain_compose_config_source: ./secrets/agent-01.yaml
 captain_compose_start_service: true
 # Optional. Use a dedicated Docker config, never root's home configuration.
@@ -31,7 +31,7 @@ captain_compose_managed_secret_files:
     dest: ca.pem
 ```
 
-Run a review in check mode, then apply:
+Validate syntax, then apply:
 
 ```bash
 ansible-playbook --syntax-check deploy/ansible/site.yml

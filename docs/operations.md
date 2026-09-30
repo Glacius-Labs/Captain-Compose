@@ -13,7 +13,7 @@ Download `scripts/install.sh` from a reviewed repository tag or extract a releas
 archive, then run:
 
 ```bash
-bash scripts/install.sh --version 1.1.0 --prefix "$HOME/.local/bin"
+bash scripts/install.sh --version 1.1.0-rc.1 --prefix "$HOME/.local/bin"
 captain-compose-mqtt --version
 captain-compose --version
 ```
@@ -29,10 +29,10 @@ Linux/macOS tarballs and Windows ZIPs for amd64 and arm64. On Windows, compare
 the ZIP and run both EXEs:
 
 ```powershell
-gh attestation verify .\captain-compose_1.1.0_windows_amd64.zip `
+gh attestation verify .\captain-compose_1.1.0-rc.1_windows_amd64.zip `
   --repo Glacius-Labs/Captain-Compose `
   --signer-workflow Glacius-Labs/Captain-Compose/.github/workflows/release.yml `
-  --source-ref refs/tags/v1.1.0 --deny-self-hosted-runners
+  --source-ref refs/tags/v1.1.0-rc.1 --deny-self-hosted-runners
 ```
 
 Checksums detect corruption; the signed provenance check establishes the expected
@@ -41,7 +41,7 @@ installed for online verification. A release includes per-archive `.jsonl` bundl
 files and `trusted_root.jsonl` under its `offline` assets for disconnected installs:
 
 ```bash
-bash scripts/install.sh --version 1.1.0 --archive-dir ./release-assets \
+bash scripts/install.sh --version 1.1.0-rc.1 --archive-dir ./release-assets \
   --attestation-dir ./release-assets/offline
 ```
 

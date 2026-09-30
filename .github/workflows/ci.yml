@@ -166,6 +166,7 @@ jobs:
           jq -e '.success == true and .request_id == "5420f0a0-91f8-4cae-baf6-b28936e4e1b5"' service-event.json
       - name: Converge Ansible role on disposable runner
         run: |
+          printf '[captain_compose]\nlocalhost ansible_connection=local\n' > "$RUNNER_TEMP/ansible-inventory.ini"
           cat > "$RUNNER_TEMP/ansible-test.yml" <<EOF
           captain_compose_version: "0.0.0-test"
           captain_compose_config_source: "$GITHUB_WORKSPACE/config/mqtt/config.example.yaml"
@@ -173,8 +174,8 @@ jobs:
           captain_compose_checksums_source: "$GITHUB_WORKSPACE/dist/0.0.0-test/checksums.txt"
           captain_compose_verify_provenance: false
           EOF
-          "$RUNNER_TEMP/ansible/bin/ansible-playbook" -i localhost, -c local deploy/ansible/site.yml -e "@$RUNNER_TEMP/ansible-test.yml"
-          "$RUNNER_TEMP/ansible/bin/ansible-playbook" -i localhost, -c local deploy/ansible/site.yml -e "@$RUNNER_TEMP/ansible-test.yml" \
+          "$RUNNER_TEMP/ansible/bin/ansible-playbook" -i "$RUNNER_TEMP/ansible-inventory.ini" deploy/ansible/site.yml -e "@$RUNNER_TEMP/ansible-test.yml"
+          "$RUNNER_TEMP/ansible/bin/ansible-playbook" -i "$RUNNER_TEMP/ansible-inventory.ini" deploy/ansible/site.yml -e "@$RUNNER_TEMP/ansible-test.yml" \
             | tee ansible-converge-second.txt
           grep -q 'changed=0' ansible-converge-second.txt
           sudo systemctl is-active --quiet captain-compose.service
