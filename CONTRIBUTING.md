@@ -20,7 +20,8 @@ and test failure/restart behavior as carefully as the successful path. Do not ad
 unneeded frameworks. Document wire, state or deployment behavior changes and include
 migration instructions. Add unresolved findings to `docs/problems-and-ideas.md`.
 
-For release maintenance, run `bash scripts/release.sh X.Y.Z`, inspect the archives,
-then create a `vX.Y.Z` tag on a reviewed commit on main. The release workflow repeats
-CI, builds six archives, attests them and creates a **draft** GitHub release. Review
-the notes and assets before publishing. Do not replace existing version tags/assets.
+For release maintenance, run `bash scripts/release.sh X.Y.Z`, inspect the archives in
+`dist/X.Y.Z/`, then create a `vX.Y.Z` tag on a reviewed, clean commit on main. The release
+workflow repeats CI, builds six archives, attests them and creates a **draft** GitHub
+release. Review the notes and assets before publishing. Do not replace existing version
+tags/assets.

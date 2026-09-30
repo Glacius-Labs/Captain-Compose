@@ -46,9 +46,23 @@ runs, not as unresolved defects.
 
 ## Release and production acceptance
 
-Before calling a release production accepted, maintainers must configure required
-branch checks, release reviewers and tag permissions; publish a reviewed release;
-verify artifact checksums/provenance; configure real broker TLS/ACLs and backups; and
-run create/update/remove plus disconnect/restart tests on the intended production
-host. These depend on environment ownership and credentials, and are not inferred
-from unit tests or a successful build. See `problems-and-ideas.md` for boundaries.
+The release preparation includes independent Luna High reviews of runtime recovery,
+delivery tooling and the operator contract. Findings led to persisted queue sequence
+ordering, directory-synced manifests, stricter release packaging and additional TLS
+coverage. See the release PR and `problems-and-ideas.md` for details.
+
+Repository controls configured and read back on 2026-09-30:
+
+- `main` requires an up-to-date PR with all five checks from the GitHub Actions app,
+  including for administrators. Force pushes and branch deletion are disabled.
+- The `release` environment accepts only `v*` tags.
+- An active tag ruleset prevents updates and deletion of existing `v*` tags.
+- Private vulnerability reporting is enabled.
+- Release artifacts remain draft until their checksums and attestations are verified
+  and the authorized release operator publishes them. No extra human-reviewer gate
+  is configured for this single-maintainer release workflow.
+
+Production-host acceptance is separate from publishing binaries: configure real
+broker TLS/ACLs and backups, then run create/update/remove plus disconnect/restart
+tests on the intended host. No production host has been selected or modified by this
+release work. These environment checks are not inferred from a successful build.

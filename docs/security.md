@@ -28,8 +28,10 @@ restricted backups. Completed receipts discard payloads. Secrets are not echoed 
 Compose failure diagnostics. Never commit production config, keys or credentials.
 
 Release workflows run tests before packaging, pin third-party actions by commit, and
-create checksums and GitHub build attestations. Configure the `release` environment
-with required reviewers and restrict release tag creation to maintainers. Pull request
+create checksums and GitHub build attestations. The `release` environment is limited
+to version tags and existing release tags cannot be changed or deleted. Publication
+follows artifact verification by the authorized release operator; teams can additionally
+configure required environment reviewers when separate human approval is needed. Pull request
 workflows use read-only permissions and never use `pull_request_target`.
 
 Report suspected vulnerabilities privately using the repository's GitHub security

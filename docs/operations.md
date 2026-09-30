@@ -48,12 +48,13 @@ sudo bash scripts/provision.sh --config ./production.yaml --start
 sudo journalctl -u captain-compose.service -f
 ```
 
-Provisioning is repeatable: it preserves existing configuration, creates the system
-user, grants Docker group access, installs the unit, and enables it. Starting is
-explicit. The unit restarts failed processes and stops the agent on SIGTERM without
-tearing down workloads. `--start` stops any running agent before preflight to release
-its state lock, then restarts it. A failed preflight leaves the service stopped for
-repair. Existing config edits require `systemctl restart`.
+Provisioning is repeatable: it preserves existing configuration contents, secures an
+existing config as `root:captain-compose` mode `0640`, creates the system user, grants
+Docker group access, installs the unit, and enables it. Symlinked or non-regular config
+destinations are rejected. Starting is explicit. The unit restarts failed processes and
+stops the agent on SIGTERM without tearing down workloads. `--start` stops any running
+agent before preflight to release its state lock, then restarts it. A failed preflight
+leaves the service stopped for repair. Existing config edits require `systemctl restart`.
 
 ## Configuration
 

@@ -37,6 +37,9 @@ func (s *store) save(d deployment.Deployment, payload []byte) (string, error) {
 	if err := s.root.MkdirAll(d.Name, 0700); err != nil {
 		return "", err
 	}
+	if err := syncDirectory(s.root, "."); err != nil {
+		return "", fmt.Errorf("sync deployment store directory: %w", err)
+	}
 	f, err := s.root.OpenFile(p+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", err
@@ -55,7 +58,24 @@ func (s *store) save(d deployment.Deployment, payload []byte) (string, error) {
 	if err := s.root.Rename(p+".tmp", p); err != nil {
 		return "", err
 	}
+	if err := syncDirectory(s.root, d.Name); err != nil {
+		return "", fmt.Errorf("sync deployment manifest directory: %w", err)
+	}
 	return filepath.Join(s.root.Name(), p), nil
+}
+
+func (s *store) remove(name string) error {
+	p, err := s.path(name)
+	if err != nil {
+		return err
+	}
+	if err := s.root.Remove(p); err != nil {
+		return err
+	}
+	if err := syncDirectory(s.root, name); err != nil {
+		return fmt.Errorf("sync removed manifest directory: %w", err)
+	}
+	return nil
 }
 
 func (s *store) read(name string) ([]byte, error) {

@@ -24,6 +24,7 @@ var ErrIDConflict = errors.New("request id reused with different content")
 type record struct {
 	ID        string            `json:"id"`
 	Hash      string            `json:"hash"`
+	Sequence  uint64            `json:"sequence"`
 	Received  time.Time         `json:"received"`
 	Command   *Envelope         `json:"command,omitempty"`
 	Event     *deployment.Event `json:"event,omitempty"`
@@ -31,9 +32,12 @@ type record struct {
 }
 
 type journal struct {
-	mu      sync.Mutex
-	root    *os.Root
-	records map[string]record
+	mu       sync.Mutex
+	root     *os.Root
+	records  map[string]record
+	sequence uint64
+	syncDir  func(*os.Root) error
+	failed   error
 }
 
 func openJournal(dir string) (*journal, error) {
@@ -44,7 +48,7 @@ func openJournal(dir string) (*journal, error) {
 	if err != nil {
 		return nil, err
 	}
-	j := &journal{root: r, records: map[string]record{}}
+	j := &journal{root: r, records: map[string]record{}, syncDir: syncDirectory}
 	f, err := r.Open(".")
 	if err != nil {
 		r.Close()
@@ -80,11 +84,22 @@ func openJournal(dir string) (*journal, error) {
 		r.Close()
 		return nil, err
 	}
+	sequences := make(map[uint64]string, len(j.records))
+	for id, rec := range j.records {
+		if prior, exists := sequences[rec.Sequence]; exists {
+			r.Close()
+			return nil, fmt.Errorf("duplicate journal sequence %d in records %s and %s", rec.Sequence, prior, id)
+		}
+		sequences[rec.Sequence] = id
+		if rec.Sequence > j.sequence {
+			j.sequence = rec.Sequence
+		}
+	}
 	return j, nil
 }
 
 func validateRecord(rec record) error {
-	if rec.Received.IsZero() || (rec.Completed != nil && rec.Event == nil) {
+	if rec.Sequence == 0 || rec.Received.IsZero() || (rec.Completed != nil && rec.Event == nil) {
 		return fmt.Errorf("missing receipt metadata")
 	}
 	if rec.Event != nil && (rec.Event.RequestID != rec.ID || rec.Event.ID.String() == "00000000-0000-0000-0000-000000000000" || rec.Event.Action == "") {
@@ -112,7 +127,15 @@ func journalName(id string) string {
 	return hex.EncodeToString(h[:]) + ".json"
 }
 
-func (j *journal) save(rec record) error {
+func (j *journal) save(rec record) (err error) {
+	if j.failed != nil {
+		return fmt.Errorf("journal is unavailable after a persistence failure: %w", j.failed)
+	}
+	defer func() {
+		if err != nil {
+			j.failed = err
+		}
+	}()
 	b, err := json.Marshal(rec)
 	if err != nil {
 		return err
@@ -136,7 +159,7 @@ func (j *journal) save(rec record) error {
 	if err = j.root.Rename(name+".tmp", name); err != nil {
 		return err
 	}
-	if err = syncDirectory(j.root); err != nil {
+	if err = j.syncDir(j.root); err != nil {
 		return err
 	}
 	j.records[rec.ID] = rec
@@ -147,6 +170,7 @@ func (j *journal) prune() error {
 	for id, r := range j.records {
 		if r.Completed != nil && time.Since(*r.Completed) > receiptRetention {
 			if err := j.root.Remove(journalName(id)); err != nil {
+				j.failed = err
 				return err
 			}
 			delete(j.records, id)
@@ -158,6 +182,12 @@ func (j *journal) prune() error {
 func (j *journal) enqueue(e Envelope) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if j.failed != nil {
+		return fmt.Errorf("journal is unavailable after a persistence failure: %w", j.failed)
+	}
+	if err := j.prune(); err != nil {
+		return err
+	}
 	b, _ := json.Marshal(e)
 	hash := sha256.Sum256(b)
 	digest := hex.EncodeToString(hash[:])
@@ -166,9 +196,6 @@ func (j *journal) enqueue(e Envelope) error {
 			return ErrIDConflict
 		}
 		return nil
-	}
-	if err := j.prune(); err != nil {
-		return err
 	}
 	pending := 0
 	for _, r := range j.records {
@@ -179,7 +206,15 @@ func (j *journal) enqueue(e Envelope) error {
 	if pending >= maxPending || len(j.records) >= maxReceipts {
 		return fmt.Errorf("journal capacity reached; wait for processing or receipt retention expiry")
 	}
-	return j.save(record{ID: e.ID, Hash: digest, Received: time.Now().UTC(), Command: &e})
+	if j.sequence == ^uint64(0) {
+		return fmt.Errorf("journal sequence exhausted")
+	}
+	seq := j.sequence + 1
+	if err := j.save(record{ID: e.ID, Hash: digest, Sequence: seq, Received: time.Now().UTC(), Command: &e}); err != nil {
+		return err
+	}
+	j.sequence = seq
+	return nil
 }
 
 func (j *journal) next() (record, bool) {
@@ -191,12 +226,7 @@ func (j *journal) next() (record, bool) {
 			pending = append(pending, r)
 		}
 	}
-	sort.Slice(pending, func(i, k int) bool {
-		if pending[i].Received.Equal(pending[k].Received) {
-			return pending[i].ID < pending[k].ID
-		}
-		return pending[i].Received.Before(pending[k].Received)
-	})
+	sort.Slice(pending, func(i, k int) bool { return pending[i].Sequence < pending[k].Sequence })
 	if len(pending) == 0 {
 		return record{}, false
 	}

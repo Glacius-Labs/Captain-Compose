@@ -63,11 +63,100 @@ func TestJournalRecoveryDeduplicationAndConflict(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestJournalPreservesEnqueueOrderAcrossTimestampChangesAndRestart(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		set  func(time.Time, *record, *record)
+	}{
+		{
+			name: "equal timestamps",
+			set: func(now time.Time, first, second *record) {
+				first.Received = now
+				second.Received = now
+			},
+		},
+		{
+			name: "clock moved backwards",
+			set: func(now time.Time, first, second *record) {
+				first.Received = now
+				second.Received = now.Add(-time.Minute)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			j, err := openJournal(dir)
+			require.NoError(t, err)
+			first := command()
+			first.ID = "f0000000-0000-4000-8000-000000000001"
+			second := command()
+			second.ID = "00000000-0000-4000-8000-000000000002"
+			require.NoError(t, j.enqueue(first))
+			require.NoError(t, j.enqueue(second))
+
+			firstRecord := j.records[first.ID]
+			secondRecord := j.records[second.ID]
+			tc.set(time.Now().UTC(), &firstRecord, &secondRecord)
+			require.NoError(t, j.update(firstRecord))
+			require.NoError(t, j.update(secondRecord))
+			require.NoError(t, j.root.Close())
+
+			j, err = openJournal(dir)
+			require.NoError(t, err)
+			defer j.root.Close()
+			next, ok := j.next()
+			require.True(t, ok)
+			require.Equal(t, first.ID, next.ID)
+
+			event := deployment.NewRemovedEvent("web")
+			event.RequestID = next.ID
+			next.Event = &event
+			now := time.Now().UTC()
+			next.Completed = &now
+			next.Command = nil
+			require.NoError(t, j.update(next))
+			following, ok := j.next()
+			require.True(t, ok)
+			require.Equal(t, second.ID, following.ID)
+
+			third := command()
+			require.NoError(t, j.enqueue(third))
+			require.Greater(t, j.records[third.ID].Sequence, following.Sequence)
+		})
+	}
+}
+
 func TestJournalFailsClosedOnCorruption(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(dir+"/bad.json", []byte("broken"), 0600))
 	_, err := openJournal(dir)
 	require.Error(t, err)
+}
+
+func TestJournalRejectsMissingOrDuplicateSequence(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seq  func(record, record) (uint64, uint64)
+	}{
+		{name: "zero sequence", seq: func(first, _ record) (uint64, uint64) { return 0, first.Sequence + 1 }},
+		{name: "duplicate sequence", seq: func(first, _ record) (uint64, uint64) { return first.Sequence, first.Sequence }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			j, err := openJournal(dir)
+			require.NoError(t, err)
+			first, second := command(), command()
+			require.NoError(t, j.enqueue(first))
+			require.NoError(t, j.enqueue(second))
+			a, b := j.records[first.ID], j.records[second.ID]
+			a.Sequence, b.Sequence = tc.seq(a, b)
+			require.NoError(t, j.update(a))
+			require.NoError(t, j.update(b))
+			require.NoError(t, j.root.Close())
+			_, err = openJournal(dir)
+			require.Error(t, err)
+		})
+	}
 }
 
 func TestJournalCapacityAndRetention(t *testing.T) {
@@ -88,6 +177,59 @@ func TestJournalCapacityAndRetention(t *testing.T) {
 	require.NoError(t, j.update(r))
 	require.NoError(t, j.prune())
 	require.Empty(t, j.records)
+}
+
+func TestJournalPrunesExpiredIDBeforeDeduplication(t *testing.T) {
+	j, err := openJournal(t.TempDir())
+	require.NoError(t, err)
+	defer j.root.Close()
+	original := command()
+	require.NoError(t, j.enqueue(original))
+	r, ok := j.next()
+	require.True(t, ok)
+	event := deployment.NewRemovedEvent("web")
+	event.RequestID = original.ID
+	r.Event = &event
+	expired := time.Now().Add(-receiptRetention - time.Second)
+	r.Completed = &expired
+	r.Command = nil
+	require.NoError(t, j.update(r))
+
+	reused := original
+	reused.Data = json.RawMessage(`{"name":"other"}`)
+	require.NoError(t, j.enqueue(reused))
+	next, ok := j.next()
+	require.True(t, ok)
+	require.Equal(t, original.ID, next.ID)
+	require.Equal(t, uint64(2), next.Sequence)
+}
+
+func TestJournalPoisonsAfterUncertainDirectorySyncFailure(t *testing.T) {
+	j, err := openJournal(t.TempDir())
+	require.NoError(t, err)
+	defer j.root.Close()
+	first := command()
+	j.syncDir = func(*os.Root) error { return errors.New("injected directory sync failure") }
+	require.Error(t, j.enqueue(first))
+	require.Zero(t, j.sequence)
+	require.Empty(t, j.records)
+
+	firstPath := journalName(first.ID)
+	persisted, err := j.root.ReadFile(firstPath)
+	require.NoError(t, err)
+	var diskRecord record
+	require.NoError(t, json.Unmarshal(persisted, &diskRecord))
+	require.Equal(t, uint64(1), diskRecord.Sequence)
+
+	require.Error(t, j.enqueue(first))
+	require.Error(t, j.update(diskRecord))
+	second := command()
+	require.Error(t, j.enqueue(second))
+	_, err = j.root.ReadFile(journalName(second.ID))
+	require.ErrorIs(t, err, os.ErrNotExist)
+	current, err := j.root.ReadFile(firstPath)
+	require.NoError(t, err)
+	require.Equal(t, persisted, current)
 }
 
 type message struct {

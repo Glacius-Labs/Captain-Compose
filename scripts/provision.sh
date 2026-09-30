@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Configure an already installed agent as a Linux systemd service.
 set -euo pipefail
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=provision-lib.sh
+source "$script_dir/provision-lib.sh"
 config=''
 start=false
 dry_run=false
@@ -21,6 +24,7 @@ if "$dry_run"; then
   exit 0
 fi
 [[ "$EUID" == 0 ]] || { echo 'Run with sudo (Docker access grants host administration)' >&2; exit 1; }
+validate_config_destination /etc/captain-compose/config.yaml
 [[ -x /usr/local/bin/captain-compose-mqtt ]] || { echo 'First install the release into /usr/local/bin' >&2; exit 1; }
 command -v systemctl >/dev/null
 getent group docker >/dev/null || { echo 'Install Docker Engine and Compose plugin first' >&2; exit 1; }
@@ -31,6 +35,7 @@ install -d -o root -g captain-compose -m 0750 /etc/captain-compose
 if [[ ! -e /etc/captain-compose/config.yaml ]]; then
   install -o root -g captain-compose -m 0640 "$config" /etc/captain-compose/config.yaml
 else
+  secure_config_destination /etc/captain-compose/config.yaml captain-compose
   echo 'Existing configuration preserved: /etc/captain-compose/config.yaml'
 fi
 cat > /etc/systemd/system/captain-compose.service <<'UNIT'

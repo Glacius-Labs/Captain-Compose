@@ -134,8 +134,7 @@ func (r *runtime) Remove(ctx context.Context, name string) error {
 	if _, err := r.run(ctx, payload, append(composeArgs(name), "down", "--remove-orphans")...); err != nil {
 		return err
 	}
-	p, _ := r.store.path(name)
-	return r.store.root.Remove(p)
+	return r.store.remove(name)
 }
 
 func composeArgs(name string) []string {
@@ -222,6 +221,7 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 
 func execute(ctx context.Context, input []byte, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "docker", args...)
+	configureProcess(cmd)
 	cmd.Stdin = bytes.NewReader(input)
 	// Retain Docker connectivity and registry credentials, not agent MQTT secrets.
 	for _, key := range []string{"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "PROGRAMDATA", "PROGRAMFILES", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "SSH_AUTH_SOCK"} {

@@ -75,17 +75,17 @@ intended operation and preserve it when retrying uncertain delivery.
 
 ## Install and provision
 
-Use an available version from [GitHub Releases](https://github.com/Glacius-Labs/Captain-Compose/releases).
+Use [Captain Compose 1.0.0](https://github.com/Glacius-Labs/Captain-Compose/releases/tag/v1.0.0)
+or a newer stable version from GitHub Releases.
 Archives include the binary, documentation, example config, license and installers.
-The release pipeline produces checksums and build attestations. A configured pipeline
-does not imply that a stable release has already been published.
+The release pipeline produces checksums and build attestations.
 
 ```bash
-bash scripts/install.sh --version X.Y.Z --prefix "$HOME/.local/bin"
+bash scripts/install.sh --version 1.0.0 --prefix "$HOME/.local/bin"
 bash scripts/provision.sh --config ./production.yaml --dry-run
 ```
 
-Replace `X.Y.Z` with a published version. For systemd, install to `/usr/local/bin`
+For systemd, install to `/usr/local/bin`
 and follow the [operations guide](docs/operations.md) to configure secrets, service
 ownership and startup. The installer supports offline archives and verifies SHA-256
 before replacing the executable. Provisioning preserves existing configuration and
@@ -111,5 +111,6 @@ Version tags on main produce a tested, attested **draft** release for maintainer
 - [Readiness evidence](docs/production-readiness.md)
 - [Problems, decisions and ideas](docs/problems-and-ideas.md)
 - [Contributing and releases](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 Licensed under [Apache-2.0](LICENSE).

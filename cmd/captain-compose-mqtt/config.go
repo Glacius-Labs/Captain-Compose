@@ -32,7 +32,6 @@ type MQTTConfig struct {
 }
 
 type TLSConfig struct {
-	Enable             bool   `yaml:"enable"`
 	CACertPath         string `yaml:"ca_cert_path"`
 	ClientCertPath     string `yaml:"client_cert_path"`
 	ClientKeyPath      string `yaml:"client_key_path"`
@@ -108,9 +107,6 @@ func (c Config) Validate() error {
 	}
 	if !secure && !c.MQTT.AllowInsecure {
 		return fmt.Errorf("plaintext MQTT requires explicit allow_insecure: true")
-	}
-	if c.MQTT.TLS.Enable && !secure {
-		return fmt.Errorf("TLS requires ssl://, tls:// or wss:// broker URL")
 	}
 	if c.MQTT.TLS.InsecureSkipVerify {
 		return fmt.Errorf("TLS certificate verification cannot be disabled")

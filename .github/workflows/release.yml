@@ -9,9 +9,11 @@ jobs:
     uses: ./.github/workflows/ci.yml
   publish:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: release
+    env:
+      RELEASE_ASSET_DIR: dist/${{ github.ref_name }}
     permissions:
       contents: write
       id-token: write
@@ -27,13 +29,13 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Build release archives
-        run: bash scripts/release.sh "${GITHUB_REF_NAME#v}"
+        run: bash scripts/release.sh "${GITHUB_REF_NAME#v}" "$RELEASE_ASSET_DIR"
       - name: Attest release assets
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
-          subject-path: dist/*
+          subject-path: ${{ env.RELEASE_ASSET_DIR }}/*
       - name: Publish draft release for final review
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft --generate-notes --title "Captain Compose $GITHUB_REF_NAME"
+          gh release create "$GITHUB_REF_NAME" "$RELEASE_ASSET_DIR"/* --verify-tag --draft --generate-notes --title "Captain Compose $GITHUB_REF_NAME"

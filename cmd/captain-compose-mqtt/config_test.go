@@ -37,7 +37,7 @@ func TestConfigDefaultsAndSecretOverride(t *testing.T) {
 }
 
 func TestConfigurationRejectsTyposAndUnsafeSettings(t *testing.T) {
-	for _, suffix := range []string{"unknown: true\n", "operation_timeout: 0s\n", "log:\n  level: typo\n", "---\nlog: {}\n"} {
+	for _, suffix := range []string{"unknown: true\n", "operation_timeout: 0s\n", "log:\n  level: typo\n", "---\nlog: {}\n", "  tls:\n    enable: true\n"} {
 		_, err := loadTestConfig(t, minimalConfig+suffix)
 		require.Error(t, err)
 	}

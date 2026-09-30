@@ -5,7 +5,6 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,14 +34,13 @@ func TestRealBrokerReconnectAndRecovery(t *testing.T) {
 		require.NoError(t, err, string(out))
 		return strings.TrimSpace(string(out))
 	}
-	port, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	address := "tcp://" + port.Addr().String()
-	binding := port.Addr().String() + ":1883"
-	require.NoError(t, port.Close())
-	docker("run", "--detach", "--name", name, "--publish", binding, "--mount", "type=bind,source="+config+",target=/mosquitto/config/mosquitto.conf,readonly", "eclipse-mosquitto:2.0.22")
+	docker("run", "--detach", "--name", name, "--publish", "127.0.0.1::1883", "--mount", "type=bind,source="+config+",target=/mosquitto/config/mosquitto.conf,readonly", "--entrypoint", "sh", "eclipse-mosquitto:2.0.22", "-c", "while true; do mosquitto -c /mosquitto/config/mosquitto.conf; sleep 1; done")
+	// Docker chooses an available host port atomically. Restart Mosquitto inside
+	// the live container so the published host mapping stays attached to the test.
 	defer exec.Command("docker", "rm", "--force", name).Run()
+	address := "tcp://" + strings.TrimSpace(docker("port", name, "1883/tcp"))
 	var listener *Listener
+	var err error
 	connected := make(chan struct{}, 8)
 	opts := paho.NewClientOptions().AddBroker(address).SetClientID(name).SetCleanSession(false).SetAutoAckDisabled(true).SetAutoReconnect(true).SetMaxReconnectInterval(time.Second).SetConnectTimeout(2 * time.Second)
 	opts.SetOnConnectHandler(func(c paho.Client) { listener.Subscribe(c); connected <- struct{}{} })
@@ -94,7 +92,7 @@ func TestRealBrokerReconnectAndRecovery(t *testing.T) {
 		}
 	}
 	send()
-	docker("restart", name)
+	docker("exec", name, "sh", "-c", "for proc in /proc/[0-9]*; do if [ -r \"$proc/comm\" ]; then IFS= read -r process < \"$proc/comm\"; if [ \"$process\" = mosquitto ]; then kill -TERM \"${proc##*/}\"; fi; fi; done")
 	select {
 	case <-connected:
 	case <-ctx.Done():

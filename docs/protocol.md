@@ -69,9 +69,18 @@ Failure events include an `error` label. Result publication is QoS 1, non-retain
 
 ## Migration from the prototype
 
+Unreleased development snapshots with journal records lacking `sequence` are not
+compatible with the stable journal format. Do not discard pending commands. Drain
+them with the matching development binary, stop the agent, back up the complete
+state, and start with a fresh journal only when no pending work remains. Preserve
+deployment manifests and controller-side request history during this transition.
+
 Requests now require `id`; use a new UUID for each intended operation. Move shared
 topics to per-node topics and client IDs. Plaintext connections require the explicit
 development setting `allow_insecure: true`; disabling TLS verification is rejected.
+TLS is selected by the secure broker URL scheme (`ssl://`, `tls://` or `wss://`);
+the redundant prototype `mqtt.tls.enable` option is no longer accepted. Configure
+`mqtt.tls.ca_cert_path` and the optional client certificate/key paths as needed.
 The old prototype deleted its manifests and used unprefixed Docker projects, so it
 cannot automatically transfer ownership. Export/recover old manifests, back up data,
 stop the old agent, and migrate each workload explicitly. Do not run old and new

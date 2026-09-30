@@ -16,7 +16,8 @@ engine. This is a trusted administration channel, not a multi-tenant sandbox.
 - `internal/adapter/docker` owns manifest persistence and Docker Compose execution.
 
 The callback stores a valid command before acknowledging QoS 1. A single worker
-processes accepted commands in persisted arrival order. It stores the result before
+processes accepted commands by a persisted enqueue sequence, independent of wall-clock
+adjustments. It stores the result before
 publishing it at QoS 1. After broker acknowledgement, it stores a completed receipt
 and removes the original command payload from that receipt. The broker session is
 persistent, and the exact topic is resubscribed after every reconnect.
@@ -66,12 +67,16 @@ manifest with `down --remove-orphans`, preserving named and anonymous volumes.
 Subprocesses inherit only Docker/OS connectivity settings, never MQTT credentials.
 Implicit `.env` loading is disabled. Compose diagnostics are suppressed because they
 may contain submitted secrets. Logs and events contain generic operation errors.
+Cancellation terminates the Docker CLI process group on Linux/macOS and requests
+termination of its process tree on Windows. Already accepted Docker Engine requests
+can still leave partial changes; cancellation is not a rollback. Windows requires
+permission to terminate the CLI's descendants, as provided in normal local execution.
 
 ## Storage
 
 `state_dir/deployments/<name>/compose.json` contains the latest normalized intent.
 `state_dir/journal/<hash>.json` contains pending commands or completed receipts.
 Files are written with restrictive permissions using write, fsync, and atomic rename;
-the MQTT journal also syncs its directory on Unix. `os.OpenRoot` confines access.
+the MQTT journal and deployment-manifest directories are synced on Unix. `os.OpenRoot` confines access.
 Power-loss guarantees depend on the filesystem; Windows lacks directory fsync here.
 Back up the complete state directory together while the agent is stopped.

@@ -41,7 +41,17 @@
 
 ## Release administration
 
-Before the first public release, configure branch protection, required CI checks,
-tag permissions, the release environment reviewers and private security reporting.
-Publishing a release and deploying onto a real production node remain explicit release
-operations. A successful test run is not evidence of production credentials or ACLs.
+Branch protection, required CI checks, immutable version tags, a tag-restricted release
+environment and private vulnerability reporting are configured. The first stable
+release uses explicit artifact verification before publishing its draft; a separate
+required-human-reviewer gate is optional for a future multi-maintainer team.
+Publishing a release and deploying onto a real production node are separate operations.
+A successful test run is not evidence of production credentials or ACLs.
+
+## Independent pre-release review
+
+Luna High reviewers identified and prompted repairs for wall-clock-dependent queue
+ordering, missing manifest-directory synchronization, stale/local-dirty release
+packaging, existing configuration permissions, and gaps in TLS integration coverage.
+Tests are added alongside each repair. These replace earlier prototype assumptions
+with verifiable behavior; they do not remove the operating boundaries above.
