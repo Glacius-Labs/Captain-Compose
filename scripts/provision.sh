@@ -2,7 +2,7 @@
 # Configure an already installed agent as a Linux systemd service.
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=provision-lib.sh
+# shellcheck source=scripts/provision-lib.sh
 source "$script_dir/provision-lib.sh"
 config=''
 start=false

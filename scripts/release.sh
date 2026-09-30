@@ -18,7 +18,12 @@ if [[ -e "$output_dir" || -L "$output_dir" ]]; then
   exit 1
 fi
 stage_output=$(mktemp -d "$output_parent/.captain-compose-${version}.XXXXXX")
-trap 'rm -rf -- "$stage_output"' EXIT
+stage=''
+cleanup() {
+  [[ -z "$stage" ]] || rm -rf -- "$stage"
+  rm -rf -- "$stage_output"
+}
+trap cleanup EXIT
 commit=$(git rev-parse HEAD)
 date=$(git show -s --format=%cI HEAD)
 for os in linux darwin windows; do
@@ -39,6 +44,7 @@ for os in linux darwin windows; do
     fi
     # Only delete this invocation's mktemp directory.
     rm -rf -- "$stage"
+    stage=''
   done
 done
 (cd "$stage_output" && sha256sum captain-compose_"$version"_* > checksums.txt)
