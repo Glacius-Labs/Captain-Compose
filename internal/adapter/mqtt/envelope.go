@@ -8,6 +8,7 @@ const (
 )
 
 type Envelope struct {
+	ID   string          `json:"id"`
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
 }

@@ -1,0 +1,17 @@
+state_dir: /var/lib/captain-compose
+operation_timeout: 5m
+listener_topic: captain-compose/node-01/commands
+publisher_topic: captain-compose/node-01/events
+mqtt:
+  broker_url: ssl://mqtt.example.com:8883
+  client_id: captain-compose-node-01
+  username: node-01
+  password_file: /etc/captain-compose/mqtt-password
+  tls:
+    ca_cert_path: /etc/captain-compose/ca.pem
+    # Optional mutual TLS:
+    # client_cert_path: /etc/captain-compose/client.pem
+    # client_key_path: /etc/captain-compose/client.key
+log:
+  level: info
+  format: json

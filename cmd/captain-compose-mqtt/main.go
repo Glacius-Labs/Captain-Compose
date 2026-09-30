@@ -1,51 +1,101 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/glacius-labs/captain-compose/internal/adapter/docker"
-	"github.com/glacius-labs/captain-compose/internal/adapter/mqtt"
-	"github.com/glacius-labs/captain-compose/internal/app"
+	adapter "github.com/glacius-labs/captain-compose/internal/adapter/mqtt"
+	"github.com/gofrs/flock"
 )
 
+var version = "dev"
+var commit = "unknown"
+var buildDate = "unknown"
+
 func main() {
-	cfg, err := LoadConfig("config.yaml")
+	if err := run(); err != nil {
+		slog.Error("Captain Compose stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	configPath := flag.String("config", "config.yaml", "Path to YAML configuration")
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	check := flag.Bool("check", false, "Validate configuration, TLS files and Docker access without subscribing")
+	flag.Parse()
+	if flag.NArg() != 0 {
+		return fmt.Errorf("unexpected positional arguments")
+	}
+	if *showVersion {
+		fmt.Printf("captain-compose-mqtt %s (%s, %s)\n", version, commit, buildDate)
+		return nil
+	}
+	cfg, err := LoadConfig(*configPath)
 	if err != nil {
-		panic(fmt.Sprintf("failed to load config: %v", err))
+		return err
 	}
-
-	if err := SetupLogger(cfg.Log); err != nil {
-		panic(fmt.Sprintf("failed to setup logger: %v", err))
-	}
-
-	slog.Info("Starting Captain Compose MQTT...")
-
-	rt, err := docker.NewRuntime()
+	closeLog, err := SetupLogger(cfg.Log)
 	if err != nil {
-		slog.Error("failed to create runtime", "error", err)
-		return
+		return err
 	}
-
-	mqttClient, err := SetupMQTT(cfg.MQTT)
+	defer closeLog()
+	opts, err := mqttOptions(cfg.MQTT)
 	if err != nil {
-		slog.Error("failed to connect to MQTT broker", "error", err)
-		return
+		return err
 	}
-	defer mqttClient.Disconnect(250)
-
-	pub := mqtt.NewPublisher(cfg.PublisherTopic, mqttClient)
-	application := app.New(rt, pub)
-
-	listener := mqtt.NewListener(cfg.ListenerTopic, mqttClient, application)
-
-	ctx := GracefulContext()
-
-	if err := listener.Start(ctx); err != nil {
-		slog.Error("Listener exited with error", "error", err)
-	} else {
-		slog.Info("Listener exited cleanly")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err = os.MkdirAll(cfg.StateDir, 0700); err != nil {
+		return err
 	}
-
-	slog.Info("Captain Compose MQTT stopped")
+	lock := flock.New(filepath.Join(cfg.StateDir, "agent.lock"))
+	locked, err := lock.TryLock()
+	if err != nil {
+		return err
+	}
+	if !locked {
+		return fmt.Errorf("another agent holds state_dir")
+	}
+	defer lock.Close()
+	rt, err := docker.NewRuntime(filepath.Join(cfg.StateDir, "deployments"), cfg.OperationTimeout)
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	if err = rt.Check(ctx); err != nil {
+		return fmt.Errorf("Docker readiness: %w", err)
+	}
+	if *check {
+		slog.Info("Configuration, TLS and Docker checks passed")
+		return nil
+	}
+	var listener *adapter.Listener
+	opts.SetOnConnectHandler(func(c paho.Client) { listener.Subscribe(c) })
+	// Persistent broker sessions may deliver before SUBACK; register the route before connecting.
+	client := paho.NewClient(opts)
+	listener, err = adapter.NewListener(cfg.ListenerTopic, filepath.Join(cfg.StateDir, "journal"), rt, adapter.NewPublisher(cfg.PublisherTopic, client))
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	client.AddRoute(cfg.ListenerTopic, listener.HandleMessage)
+	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	err = adapter.Wait(connectCtx, client.Connect())
+	cancel()
+	defer client.Disconnect(250)
+	if err != nil {
+		return fmt.Errorf("MQTT connect failed (check broker, credentials and TLS)")
+	}
+	slog.Info("Captain Compose started", "version", version, "client_id", cfg.MQTT.ClientID)
+	return listener.Start(ctx)
 }

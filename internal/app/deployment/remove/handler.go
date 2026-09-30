@@ -18,6 +18,9 @@ func NewHandler(runtime deployment.Runtime, publisher deployment.Publisher) *Han
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) error {
+	if err := deployment.ValidateName(cmd.Name); err != nil {
+		return err
+	}
 	if err := h.runtime.Remove(ctx, cmd.Name); err != nil {
 		event := deployment.NewRemovalFailedEvent(cmd.Name, err)
 

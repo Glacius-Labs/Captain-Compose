@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-func SetupLogger(cfg LogConfig) error {
+func SetupLogger(cfg LogConfig) (func(), error) {
+	closeLog := func() {}
 	var level slog.Level
 	switch strings.ToLower(cfg.Level) {
 	case "debug":
@@ -25,11 +26,12 @@ func SetupLogger(cfg LogConfig) error {
 	outputs = append(outputs, os.Stdout)
 
 	if cfg.FilePath != "" {
-		logFile, err := os.OpenFile(cfg.FilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		logFile, err := os.OpenFile(cfg.FilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
+			return nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		outputs = append(outputs, logFile)
+		closeLog = func() { _ = logFile.Close() }
 	}
 
 	writer := io.MultiWriter(outputs...)
@@ -45,5 +47,5 @@ func SetupLogger(cfg LogConfig) error {
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
-	return nil
+	return closeLog, nil
 }

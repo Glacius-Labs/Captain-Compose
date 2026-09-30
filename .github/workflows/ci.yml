@@ -1,0 +1,95 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-24.04
+          - os: windows-latest
+            runner: windows-latest
+          - os: macos-latest
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - run: go mod verify
+      - run: go test -race '-coverprofile=coverage.out' ./...
+      - run: go vet ./...
+      - run: go build ./cmd/...
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage.out
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - run: docker compose version
+      - run: go test -race -tags=integration -timeout=5m ./...
+        env:
+          CAPTAIN_INTEGRATION: '1'
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Formatting and module consistency
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - run: shellcheck scripts/*.sh
+      - run: bash scripts/test-install.sh
+      - run: bash scripts/release.sh 0.0.0-test dist/0.0.0-test
+      - name: Smoke test packaged binary
+        run: |
+          mkdir smoke
+          tar -xzf dist/0.0.0-test/captain-compose_0.0.0-test_linux_amd64.tar.gz -C smoke
+          smoke/captain-compose-mqtt --version
+          (cd dist/0.0.0-test && sha256sum --check checksums.txt)
+      - name: Verify systemd provisioning on disposable runner
+        run: |
+          trap 'sudo systemctl stop captain-compose.service || true; docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml down --volumes' EXIT
+          sudo install -m 0755 smoke/captain-compose-mqtt /usr/local/bin/captain-compose-mqtt
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml up -d
+          sudo bash scripts/provision.sh --config config/mqtt/config.example.yaml --start
+          sudo bash scripts/provision.sh --config config/mqtt/config.example.yaml --start
+          sudo systemd-analyze verify /etc/systemd/system/captain-compose.service
+          sudo systemctl is-enabled captain-compose.service
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml exec -T mosquitto mosquitto_sub -t captain-compose/dev-node/events -q 1 -C 1 -W 20 > service-event.json &
+          subscriber=$!
+          sleep 2
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml exec -T mosquitto mosquitto_pub -t captain-compose/dev-node/commands -q 1 -m '{"id":"5420f0a0-91f8-4cae-baf6-b28936e4e1b5","type":"remove","data":{"name":"service-smoke"}}'
+          wait "$subscriber"
+          jq -e '.success == true and .request_id == "5420f0a0-91f8-4cae-baf6-b28936e4e1b5"' service-event.json

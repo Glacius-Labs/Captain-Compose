@@ -8,6 +8,7 @@ import (
 )
 
 type Event struct {
+	RequestID string            `json:"request_id,omitempty"`
 	ID        uuid.UUID         `json:"id"`
 	Timestamp time.Time         `json:"timestamp"`
 	Action    string            `json:"action"`
@@ -25,7 +26,7 @@ const (
 func NewCreatedEvent(name string) Event {
 	return Event{
 		ID:        uuid.New(),
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Action:    ActionCreate,
 		Name:      name,
 		Success:   true,
@@ -36,7 +37,7 @@ func NewCreatedEvent(name string) Event {
 func NewRemovedEvent(name string) Event {
 	return Event{
 		ID:        uuid.New(),
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Action:    ActionDelete,
 		Name:      name,
 		Success:   true,
@@ -47,7 +48,7 @@ func NewRemovedEvent(name string) Event {
 func NewCreationFailedEvent(name string, err error) Event {
 	return Event{
 		ID:        uuid.New(),
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Action:    ActionCreate,
 		Name:      name,
 		Success:   false,
@@ -61,7 +62,7 @@ func NewCreationFailedEvent(name string, err error) Event {
 func NewRemovalFailedEvent(name string, err error) Event {
 	return Event{
 		ID:        uuid.New(),
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Action:    ActionDelete,
 		Name:      name,
 		Success:   false,

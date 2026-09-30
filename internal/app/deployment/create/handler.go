@@ -18,6 +18,12 @@ func NewHandler(runtime deployment.Runtime, publisher deployment.Publisher) *Han
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) error {
+	if err := deployment.ValidateName(cmd.Name); err != nil {
+		return err
+	}
+	if err := deployment.ValidatePayload(cmd.Payload); err != nil {
+		return err
+	}
 	depl := deployment.Deployment{Name: cmd.Name}
 
 	if err := h.runtime.Deploy(ctx, depl, cmd.Payload); err != nil {

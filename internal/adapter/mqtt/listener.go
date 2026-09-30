@@ -3,82 +3,151 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
+	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/glacius-labs/captain-compose/internal/app"
 	"github.com/glacius-labs/captain-compose/internal/app/deployment/create"
 	"github.com/glacius-labs/captain-compose/internal/app/deployment/remove"
+	"github.com/glacius-labs/captain-compose/internal/domain/deployment"
 )
 
 type Listener struct {
-	topic  string
-	client mqtt.Client
-	app    *app.App
+	topic     string
+	runtime   deployment.Runtime
+	publisher deployment.Publisher
+	journal   *journal
+	wake      chan struct{}
+	failures  chan error
 }
 
-func NewListener(topic string, client mqtt.Client, app *app.App) *Listener {
-	return &Listener{
-		topic:  topic,
-		client: client,
-		app:    app,
+func NewListener(topic, dir string, rt deployment.Runtime, pub deployment.Publisher) (*Listener, error) {
+	j, err := openJournal(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &Listener{topic: topic, runtime: rt, publisher: pub, journal: j, wake: make(chan struct{}, 1), failures: make(chan error, 1)}, nil
+}
+
+func (l *Listener) Close() error { return l.journal.root.Close() }
+func (l *Listener) fail(err error) {
+	select {
+	case l.failures <- err:
+	default:
+	}
+}
+
+// Subscribe runs on every connection; deployment work never runs on Paho callbacks.
+func (l *Listener) Subscribe(client paho.Client) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := Wait(ctx, client.Subscribe(l.topic, 1, l.HandleMessage)); err != nil {
+		l.fail(fmt.Errorf("MQTT subscribe: %w", err))
+		return
+	}
+	slog.Info("MQTT subscription ready", "topic", l.topic)
+}
+
+func (l *Listener) HandleMessage(_ paho.Client, msg paho.Message) {
+	if msg.Retained() || msg.Qos() != 1 {
+		slog.Warn("Rejected command: require non-retained QoS 1")
+		msg.Ack()
+		return
+	}
+	e, err := Decode(msg.Payload())
+	if err != nil {
+		slog.Warn("Rejected command", "error", err)
+		msg.Ack()
+		return
+	}
+	if err = l.journal.enqueue(e); err != nil {
+		if errors.Is(err, ErrIDConflict) {
+			slog.Warn("Rejected conflicting request ID", "request_id", e.ID)
+			msg.Ack()
+			return
+		}
+		l.fail(fmt.Errorf("persist command: %w", err))
+		return
+	}
+	msg.Ack()
+	select {
+	case l.wake <- struct{}{}:
+	default:
 	}
 }
 
 func (l *Listener) Start(ctx context.Context) error {
-	handler := func(_ mqtt.Client, msg mqtt.Message) {
-		l.handleMessage(ctx, msg)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		rec, ok := l.journal.next()
+		if ok {
+			if rec.Event == nil {
+				event := l.execute(ctx, *rec.Command)
+				event.RequestID = rec.ID
+				rec.Event = &event
+				if ctx.Err() != nil {
+					return nil
+				}
+				if err := l.journal.update(rec); err != nil {
+					return fmt.Errorf("persist result: %w", err)
+				}
+			}
+			if err := l.publisher.Publish(ctx, *rec.Event); err == nil {
+				now := time.Now().UTC()
+				rec.Completed = &now
+				rec.Command = nil
+				if err := l.journal.update(rec); err != nil {
+					return fmt.Errorf("persist receipt: %w", err)
+				}
+				slog.Info("Command completed", "request_id", rec.ID, "success", rec.Event.Success)
+				continue
+			} else if ctx.Err() == nil {
+				slog.Warn("Event delivery pending; will retry", "request_id", rec.ID, "error", err)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case err := <-l.failures:
+			return err
+		case <-l.wake:
+		case <-ticker.C:
+		}
 	}
+}
 
-	token := l.client.Subscribe(l.topic, 1, handler)
-	if token.Wait() && token.Error() != nil {
-		return token.Error()
-	}
+type capturePublisher struct{ event deployment.Event }
 
-	slog.Info("MQTT subscription successful", "topic", l.topic)
-
-	<-ctx.Done()
-
-	slog.Info("Context cancelled, disconnecting from MQTT broker...")
-	l.client.Disconnect(250)
-	slog.Info("Disconnected from MQTT broker")
-
+func (p *capturePublisher) Publish(_ context.Context, e deployment.Event) error {
+	p.event = e
 	return nil
 }
 
-func (l *Listener) handleMessage(ctx context.Context, msg mqtt.Message) {
-	var env Envelope
-	if err := json.Unmarshal(msg.Payload(), &env); err != nil {
-		slog.Error("Failed to decode envelope", "error", err)
-		return
-	}
-
-	switch env.Type {
+func (l *Listener) execute(ctx context.Context, e Envelope) deployment.Event {
+	p := &capturePublisher{}
+	application := app.New(l.runtime, p)
+	switch e.Type {
 	case TypeCreate:
-		var cmd create.Command
-		if err := json.Unmarshal(env.Data, &cmd); err != nil {
-			slog.Error("Invalid create command", "error", err)
-			return
+		var c create.Command
+		_ = json.Unmarshal(e.Data, &c)
+		if err := application.Deployment.Create.Handle(ctx, c); err != nil && p.event.Action == "" {
+			return deployment.NewCreationFailedEvent(c.Name, err)
 		}
-		if err := l.app.Deployment.Create.Handle(ctx, cmd); err != nil {
-			slog.Error("Create command failed", "error", err, "name", cmd.Name)
-			return
-		}
-		slog.Info("Create command succeeded", "name", cmd.Name)
-
 	case TypeRemove:
-		var cmd remove.Command
-		if err := json.Unmarshal(env.Data, &cmd); err != nil {
-			slog.Error("Invalid remove command", "error", err)
-			return
+		var c remove.Command
+		_ = json.Unmarshal(e.Data, &c)
+		if err := application.Deployment.Remove.Handle(ctx, c); err != nil && p.event.Action == "" {
+			return deployment.NewRemovalFailedEvent(c.Name, err)
 		}
-		if err := l.app.Deployment.Remove.Handle(ctx, cmd); err != nil {
-			slog.Error("Remove command failed", "error", err, "name", cmd.Name)
-			return
-		}
-		slog.Info("Remove command succeeded", "name", cmd.Name)
-
-	default:
-		slog.Warn("Unknown command type", "type", env.Type)
 	}
+	return p.event
 }

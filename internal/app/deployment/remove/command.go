@@ -1,5 +1,5 @@
 package remove
 
 type Command struct {
-	Name string
+	Name string `json:"name"`
 }
