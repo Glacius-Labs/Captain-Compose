@@ -30,8 +30,8 @@ install_args=(--version "$version" --prefix /usr/local/bin)
 [[ -z "$attestation_dir" ]] || install_args+=(--attestation-dir "$attestation_dir")
 if "$checksum_only"; then install_args+=(--checksum-only); fi
 bash "$(dirname -- "${BASH_SOURCE[0]}")/install.sh" "${install_args[@]}"
-runuser -u captain-compose -- env DOCKER_CONFIG=/etc/captain-compose/docker \
-  /usr/local/bin/captain-compose-mqtt --config /etc/captain-compose/config.yaml --check
+(cd /var/lib/captain-compose && runuser -u captain-compose -- env DOCKER_CONFIG=/etc/captain-compose/docker \
+  /usr/local/bin/captain-compose-mqtt --config /etc/captain-compose/config.yaml --check)
 if "$was_active"; then
   systemctl start captain-compose.service
   systemctl is-active --quiet captain-compose.service

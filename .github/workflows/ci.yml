@@ -166,6 +166,11 @@ jobs:
           jq -e '.success == true and .request_id == "5420f0a0-91f8-4cae-baf6-b28936e4e1b5"' service-event.json
       - name: Converge Ansible role on disposable runner
         run: |
+          diagnose() {
+            sudo sh -c 'cd /var/lib/captain-compose && runuser -u captain-compose -- env DOCKER_CONFIG=/etc/captain-compose/docker /usr/local/bin/captain-compose-mqtt --config /etc/captain-compose/config.yaml --check' || true
+            sudo journalctl -u captain-compose.service -n 30 --no-pager || true
+          }
+          trap diagnose ERR
           printf '[captain_compose]\nlocalhost ansible_connection=local\n' > "$RUNNER_TEMP/ansible-inventory.ini"
           cat > "$RUNNER_TEMP/ansible-test.yml" <<EOF
           captain_compose_version: "0.0.0-test"

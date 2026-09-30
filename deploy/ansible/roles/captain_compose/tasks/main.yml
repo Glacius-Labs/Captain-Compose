@@ -323,6 +323,7 @@
       - --config
       - "{{ captain_compose_config_directory }}/config.yaml"
       - --check
+    chdir: "{{ captain_compose_state_directory }}"
   changed_when: false
   no_log: true
   when: not captain_compose_service_was_active or captain_compose_service_needs_restart
