@@ -207,16 +207,16 @@ func validateCompose(payload []byte) error {
 }
 
 type limitedBuffer struct {
-	bytes.Buffer
-	limit int
+	buffer bytes.Buffer
+	limit  int
 }
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	n := len(p)
-	if b.Len()+n > b.limit {
+	if b.buffer.Len()+n > b.limit {
 		return 0, fmt.Errorf("docker output limit exceeded")
 	}
-	_, err := b.Buffer.Write(p)
+	_, err := b.buffer.Write(p)
 	return n, err
 }
 
@@ -239,7 +239,7 @@ func execute(ctx context.Context, input []byte, args ...string) ([]byte, error) 
 		}
 		return nil, fmt.Errorf("docker operation failed: %w (inspect the workload with docker compose)", err)
 	}
-	return output.Bytes(), nil
+	return output.buffer.Bytes(), nil
 }
 
 func escapeComposeValues(value any) any {

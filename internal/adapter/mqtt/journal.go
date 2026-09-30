@@ -70,6 +70,10 @@ func openJournal(dir string) (*journal, error) {
 			r.Close()
 			return nil, fmt.Errorf("invalid journal record %s; restore state from backup", entry.Name())
 		}
+		if err := validateRecord(rec); err != nil {
+			r.Close()
+			return nil, fmt.Errorf("invalid journal record %s: %w", entry.Name(), err)
+		}
 		j.records[rec.ID] = rec
 	}
 	if err := j.prune(); err != nil {
@@ -77,6 +81,30 @@ func openJournal(dir string) (*journal, error) {
 		return nil, err
 	}
 	return j, nil
+}
+
+func validateRecord(rec record) error {
+	if rec.Received.IsZero() || (rec.Completed != nil && rec.Event == nil) {
+		return fmt.Errorf("missing receipt metadata")
+	}
+	if rec.Event != nil && (rec.Event.RequestID != rec.ID || rec.Event.ID.String() == "00000000-0000-0000-0000-000000000000" || rec.Event.Action == "") {
+		return fmt.Errorf("invalid result metadata")
+	}
+	if rec.Command != nil {
+		b, err := json.Marshal(rec.Command)
+		if err != nil {
+			return err
+		}
+		e, err := Decode(b)
+		if err != nil || e.ID != rec.ID {
+			return fmt.Errorf("invalid stored command")
+		}
+		hash := sha256.Sum256(b)
+		if hex.EncodeToString(hash[:]) != rec.Hash {
+			return fmt.Errorf("command checksum mismatch")
+		}
+	}
+	return nil
 }
 
 func journalName(id string) string {

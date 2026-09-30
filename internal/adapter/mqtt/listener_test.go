@@ -51,6 +51,7 @@ func TestJournalRecoveryDeduplicationAndConflict(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, e.ID, r.ID)
 	event := deployment.NewRemovedEvent("web")
+	event.RequestID = e.ID
 	r.Event = &event
 	require.NoError(t, j.update(r))
 	now := time.Now()

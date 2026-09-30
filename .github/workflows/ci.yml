@@ -25,7 +25,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go mod verify
-      - run: go test -race -coverprofile=coverage.out ./...
+      - run: go test -race '-coverprofile=coverage.out' ./...
       - run: go vet ./...
       - run: go build ./cmd/...
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -71,3 +71,10 @@ jobs:
           tar -xzf dist/captain-compose_0.0.0-test_linux_amd64.tar.gz -C smoke
           smoke/captain-compose-mqtt --version
           (cd dist && sha256sum --check checksums.txt)
+      - name: Verify systemd provisioning on disposable runner
+        run: |
+          sudo install -m 0755 smoke/captain-compose-mqtt /usr/local/bin/captain-compose-mqtt
+          sudo bash scripts/provision.sh --config config/mqtt/production.example.yaml
+          sudo bash scripts/provision.sh --config config/mqtt/production.example.yaml
+          sudo systemd-analyze verify /etc/systemd/system/captain-compose.service
+          sudo systemctl is-enabled captain-compose.service

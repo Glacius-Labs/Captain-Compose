@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -113,4 +114,15 @@ func TestOperationDeadline(t *testing.T) {
 	defer r.Close()
 	r.run = func(ctx context.Context, _ []byte, _ ...string) ([]byte, error) { <-ctx.Done(); return nil, ctx.Err() }
 	require.ErrorIs(t, r.Deploy(context.Background(), deployment.Deployment{Name: "web"}, []byte(validCompose)), context.DeadlineExceeded)
+}
+
+func TestComposeOutputLimitAndLiteralDollarPreservation(t *testing.T) {
+	b := &limitedBuffer{limit: 4}
+	_, err := io.Copy(b, strings.NewReader("too much output"))
+	require.Error(t, err)
+	require.LessOrEqual(t, b.buffer.Len(), 4)
+	value := map[string]any{"environment": map[string]any{"SECRET": "literal$HOME"}, "command": []any{"echo", "$VALUE"}}
+	escaped := escapeComposeValues(value).(map[string]any)
+	require.Equal(t, "literal$$HOME", escaped["environment"].(map[string]any)["SECRET"])
+	require.Equal(t, "$$VALUE", escaped["command"].([]any)[1])
 }
