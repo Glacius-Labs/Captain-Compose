@@ -152,7 +152,6 @@ jobs:
           (cd dist/0.0.0-test && sha256sum --check checksums.txt)
       - name: Verify systemd provisioning on disposable runner
         run: |
-          trap 'sudo systemctl stop captain-compose.service || true; docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml down --volumes' EXIT
           sudo install -m 0755 smoke/captain-compose-mqtt /usr/local/bin/captain-compose-mqtt
           docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml up -d
           sudo bash scripts/provision.sh --config config/mqtt/config.example.yaml --start
@@ -178,5 +177,14 @@ jobs:
           "$RUNNER_TEMP/ansible/bin/ansible-playbook" -i localhost, -c local deploy/ansible/site.yml -e "@$RUNNER_TEMP/ansible-test.yml" \
             | tee ansible-converge-second.txt
           grep -q 'changed=0' ansible-converge-second.txt
+          sudo systemctl is-active --quiet captain-compose.service
+          smoke/captain-compose --config config/operator.example.yaml --environment local --json doctor \
+            | tee ansible-doctor.json
+          jq -e '.ok == true and .state == "completed"' ansible-doctor.json
       - name: Exercise staged backup and restore safely
         run: sudo bash scripts/test-lifecycle.sh
+      - name: Clean up disposable systemd and broker services
+        if: always()
+        run: |
+          sudo systemctl stop captain-compose.service || true
+          docker compose -p captain-compose-service-test -f docker/mosquitto/docker-compose.yml down --volumes || true

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 — 2026-09-30
+## 1.1.0-rc.1 — 2026-09-30
 
 ### Operator workflow
 

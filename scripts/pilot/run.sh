@@ -41,6 +41,9 @@ DOCKER_SERVER_VERSION=$(docker version --format '{{.Server.Version}}')
 COMPOSE_VERSION=$(docker compose version --short)
 MOSQUITTO_IMAGE=eclipse-mosquitto:2.0.22
 ARCHITECTURE=$(uname -m)
+V1_AGENT_SHA256=''
+AGENT_SHA256=''
+OPERATOR_SHA256=''
 PILOT_ID="pilot-$(date -u +%Y%m%d%H%M%S)-${RANDOM}"
 WORK=$(mktemp -d "/tmp/${PILOT_ID}.XXXXXX")
 BIN_DIR="$WORK/bin"
@@ -62,6 +65,9 @@ ACTIONS='[]'
 FAILURES='[]'
 NOT_RUN=$(jq -cn --arg arch "$ARCHITECTURE" '["physical_reboot", "sudden_power_loss", "systemd_host_lifecycle"] + (if $arch=="aarch64" or $arch=="arm64" then [] else ["native_arm64"] end)')
 MONITOR_SAMPLES=0
+LAST_SAMPLE_SECONDS=0
+MAX_SAMPLE_GAP_SECONDS=0
+MAX_SAMPLE_GAP_LIMIT=120
 EXIT_STATUS=0
 FINALIZED=0
 OBSERVATION_START_UTC=''
@@ -89,13 +95,14 @@ write_report() {
   jq -n --arg pilot_id "$PILOT_ID" --arg outcome "$outcome" --arg started_at "$START_UTC" --arg updated_at "$ended" \
     --arg observation_started_at "$OBSERVATION_START_UTC" --arg duration_requested "$DURATION_TEXT" \
     --arg source_sha "$SOURCE_SHA" --arg architecture "$ARCHITECTURE" --arg legacy_tag_sha "$LEGACY_TAG_SHA" --arg go_version "$GO_VERSION" --arg docker_client_version "$DOCKER_CLIENT_VERSION" \
+    --arg v1_agent_sha256 "$V1_AGENT_SHA256" --arg agent_sha256 "$AGENT_SHA256" --arg operator_sha256 "$OPERATOR_SHA256" \
     --arg docker_server_version "$DOCKER_SERVER_VERSION" --arg compose_version "$COMPOSE_VERSION" --arg mosquitto_image "$MOSQUITTO_IMAGE" \
     --argjson source_dirty "$SOURCE_DIRTY" \
     --arg report_scope "disposable_nested_docker" --argjson elapsed_seconds "$elapsed" \
     --argjson setup_elapsed_seconds "$setup_elapsed" --argjson observation_elapsed_seconds "$observation_elapsed" \
-    --argjson monitor_samples "$MONITOR_SAMPLES" --argjson checks "$CHECKS" --argjson observed_actions "$ACTIONS" \
+    --argjson monitor_samples "$MONITOR_SAMPLES" --argjson max_sample_gap_seconds "$MAX_SAMPLE_GAP_SECONDS" --argjson max_sample_gap_limit_seconds "$MAX_SAMPLE_GAP_LIMIT" --argjson checks "$CHECKS" --argjson observed_actions "$ACTIONS" \
     --argjson failures "$FAILURES" --argjson not_run "$NOT_RUN" \
-    '{pilot_id:$pilot_id,outcome:$outcome,started_at:$started_at,updated_at:$updated_at,observation_started_at:(if $observation_started_at=="" then null else $observation_started_at end),elapsed_seconds:$elapsed_seconds,setup_elapsed_seconds:$setup_elapsed_seconds,observation_elapsed_seconds:$observation_elapsed_seconds,duration_requested:$duration_requested,report_scope:$report_scope,source:{sha:$source_sha,dirty:$source_dirty},platform:{architecture:$architecture},tools:{go:$go_version,docker_client:$docker_client_version,docker_server:$docker_server_version,compose:$compose_version,legacy_tag:"v1.0.0",legacy_tag_sha:$legacy_tag_sha,mosquitto_image:$mosquitto_image},monitor_samples:$monitor_samples,checks:$checks,observed_actions:$observed_actions,failures:$failures,not_run:$not_run}' >"$REPORT_PATH"
+    '{pilot_id:$pilot_id,outcome:$outcome,started_at:$started_at,updated_at:$updated_at,observation_started_at:(if $observation_started_at=="" then null else $observation_started_at end),elapsed_seconds:$elapsed_seconds,setup_elapsed_seconds:$setup_elapsed_seconds,observation_elapsed_seconds:$observation_elapsed_seconds,duration_requested:$duration_requested,report_scope:$report_scope,source:{sha:$source_sha,dirty:$source_dirty},platform:{architecture:$architecture},tools:{go:$go_version,docker_client:$docker_client_version,docker_server:$docker_server_version,compose:$compose_version,legacy_tag:"v1.0.0",legacy_tag_sha:$legacy_tag_sha,mosquitto_image:$mosquitto_image},binaries:{legacy_agent_sha256:(if $v1_agent_sha256=="" then null else $v1_agent_sha256 end),agent_sha256:(if $agent_sha256=="" then null else $agent_sha256 end),operator_sha256:(if $operator_sha256=="" then null else $operator_sha256 end)},monitor_samples:$monitor_samples,max_sample_gap_seconds:$max_sample_gap_seconds,max_sample_gap_limit_seconds:$max_sample_gap_limit_seconds,checks:$checks,observed_actions:$observed_actions,failures:$failures,not_run:$not_run}' >"$REPORT_PATH"
 }
 
 action() {
@@ -244,9 +251,12 @@ action runner_ready "Docker-in-Docker engine $(docker version --format '{{.Serve
 CURRENT_STAGE=binary_build
 action binaries_build_started "building tagged v1.0.0 agent and current agent/operator"
 git -C "$PWD" archive v1.0.0 | tar -x -C "$WORK/v1"
-(cd "$WORK/v1" && GOTOOLCHAIN=auto go build -trimpath -o "$BIN_DIR/captain-compose-mqtt-v1" ./cmd/captain-compose-mqtt)
-GOTOOLCHAIN=auto go build -trimpath -o "$BIN_DIR/captain-compose-mqtt" ./cmd/captain-compose-mqtt
-GOTOOLCHAIN=auto go build -trimpath -o "$BIN_DIR/captain-compose" ./cmd/captain-compose
+(cd "$WORK/v1" && CGO_ENABLED=0 GOTOOLCHAIN=auto go build -trimpath -o "$BIN_DIR/captain-compose-mqtt-v1" ./cmd/captain-compose-mqtt)
+CGO_ENABLED=0 GOTOOLCHAIN=auto go build -trimpath -o "$BIN_DIR/captain-compose-mqtt" ./cmd/captain-compose-mqtt
+CGO_ENABLED=0 GOTOOLCHAIN=auto go build -trimpath -o "$BIN_DIR/captain-compose" ./cmd/captain-compose
+V1_AGENT_SHA256=$(sha256sum "$BIN_DIR/captain-compose-mqtt-v1" | awk '{print $1}')
+AGENT_SHA256=$(sha256sum "$BIN_DIR/captain-compose-mqtt" | awk '{print $1}')
+OPERATOR_SHA256=$(sha256sum "$BIN_DIR/captain-compose" | awk '{print $1}')
 check build passed "built tag v1.0.0 and current captain-compose-mqtt and captain-compose binaries"
 
 CURRENT_STAGE=broker_tls_and_credentials
@@ -337,6 +347,7 @@ json_success "$STATUS_RESULT" || fail revision_output "inspect did not return de
 json_active_deployment "$STATUS_RESULT" || fail deployment_health "deployment did not become active with healthy services and no drift"
 REVISION=$(jq -r '.result.desired_revision // empty' <<<"$STATUS_RESULT")
 [[ "$REVISION" =~ ^[0-9a-f]{64}$ ]] || fail revision_output "deployment result omitted its SHA-256 desired revision"
+check deployment_health passed "inspect observed active deployment with every service running and healthy and no drift"
 check v2_legacy_adoption passed "v2 wrote revisioned deployment state while retaining the existing named volume"
 
 set +e
@@ -390,12 +401,17 @@ STATUS_RESULT=$(operator inspect "$LEGACY_NAME") || fail process_restart "deploy
 json_success "$STATUS_RESULT" || fail process_restart "status query after restart failed"
 check process_restart passed "current agent restarted with its persisted state and answered inspect"
 
-VOLUME="cc-$LEGACY_NAME-pilot-data"
-docker volume inspect "$VOLUME" >/dev/null || fail data_backup "expected named data volume was not present"
+VOLUME_PROJECT="cc-$LEGACY_NAME"
+VOLUME=$(docker volume ls --filter "label=com.docker.compose.project=$VOLUME_PROJECT" --filter 'label=com.docker.compose.volume=pilot-data' --format '{{.Name}}' | head -n 1)
+[[ -n "$VOLUME" ]] || fail data_backup "expected named data volume was not present"
+VOLUME_LABELS=$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}|{{index .Labels "com.docker.compose.volume"}}' "$VOLUME")
+[[ "$VOLUME_LABELS" == "$VOLUME_PROJECT|pilot-data" ]] || fail data_backup "volume label ownership did not match this pilot deployment"
 docker run --rm --volume "$VOLUME:/pilot-data:ro" --volume "$WORK:/backup" alpine:3.22 sh -c 'tar -cf /backup/data.tar -C /pilot-data .'
 stop_agent
 cp -a "$STATE_DIR" "$WORK/state-backup"
 docker compose --env-file /dev/null --project-name "cc-$LEGACY_NAME" --file tests/acceptance/fixtures/upgrade-v1.yaml down --remove-orphans >/dev/null
+VOLUME_LABELS=$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}|{{index .Labels "com.docker.compose.volume"}}' "$VOLUME")
+[[ "$VOLUME_LABELS" == "$VOLUME_PROJECT|pilot-data" ]] || fail state_restore "refusing to remove a volume no longer labeled for this pilot deployment"
 docker volume rm "$VOLUME" >/dev/null
 docker volume create "$VOLUME" >/dev/null
 docker run --rm --volume "$VOLUME:/pilot-data" --volume "$WORK:/backup" alpine:3.22 sh -c 'tar -xf /backup/data.tar -C /pilot-data'
@@ -495,11 +511,24 @@ OBSERVATION_START_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 OBSERVATION_START_SECONDS=$(date -u +%s)
 action observation_started "all deterministic acceptance actions passed; periodic inspection continues for $DURATION_TEXT"
 while :; do
+  sample_start=$(date -u +%s)
+  if (( LAST_SAMPLE_SECONDS > 0 )); then
+    sample_gap=$((sample_start - LAST_SAMPLE_SECONDS))
+    (( sample_gap > MAX_SAMPLE_GAP_SECONDS )) && MAX_SAMPLE_GAP_SECONDS=$sample_gap
+    (( sample_gap <= MAX_SAMPLE_GAP_LIMIT )) || fail observation_gap "no successful observation for ${sample_gap}s; limit is ${MAX_SAMPLE_GAP_LIMIT}s, so suspended time is not counted as continuous observation"
+  fi
   kill -0 "$AGENT_PID" 2>/dev/null || fail observation_agent_alive "agent exited during the observation window"
   docker inspect -f '{{.State.Running}}' "$BROKER" 2>/dev/null | grep -qx true || fail observation_broker_alive "private broker exited during the observation window"
   SAMPLE=$(operator inspect "$LEGACY_NAME") || fail observation_query "deployment inspection failed during the observation window"
   json_active_deployment "$SAMPLE" || fail observation_query "deployment was not active, healthy, and drift-free during the observation window"
+  sample_end=$(date -u +%s)
+  if (( LAST_SAMPLE_SECONDS > 0 )); then
+    sample_gap=$((sample_end - LAST_SAMPLE_SECONDS))
+    (( sample_gap > MAX_SAMPLE_GAP_SECONDS )) && MAX_SAMPLE_GAP_SECONDS=$sample_gap
+    (( sample_gap <= MAX_SAMPLE_GAP_LIMIT )) || fail observation_gap "no successful observation for ${sample_gap}s; limit is ${MAX_SAMPLE_GAP_LIMIT}s, so suspended time is not counted as continuous observation"
+  fi
   MONITOR_SAMPLES=$((MONITOR_SAMPLES + 1))
+  LAST_SAMPLE_SECONDS=$sample_end
   write_report
   observation_elapsed=$(( $(date -u +%s) - OBSERVATION_START_SECONDS ))
   if (( observation_elapsed >= DURATION_SECONDS && MONITOR_SAMPLES >= 2 )); then break; fi

@@ -4,7 +4,7 @@ services:
     command:
       - sh
       - -c
-      - mkdir -p /pilot-data; test -f /pilot-data/marker || printf 'v1-data\n' > /pilot-data/marker; sleep 12; touch /tmp/pilot-ready; exec sleep 3600
+      - mkdir -p /pilot-data; test -f /pilot-data/marker || printf 'v1-data\n' > /pilot-data/marker; sleep 12; touch /tmp/pilot-ready; while :; do sleep 3600; done
     volumes:
       - pilot-data:/pilot-data
     healthcheck:

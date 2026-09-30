@@ -47,9 +47,12 @@ then writes the report and removes only resources named by that invocation. Set
 report is written under `scripts/pilot/` on the mounted workspace and refreshed after
 each check and periodic inspection. The default report filename is ignored by Git.
 For a multi-day run, the outer container may run detached. The Docker daemon and host
-must remain available; this command does not create a scheduler, cloud VM, or remote
-notification service. Keep the source read-only and put the report in a separate
-bind-mounted directory, for example:
+must remain awake and available; this command does not create a scheduler, cloud VM,
+or remote notification service. The runner fails if it misses a successful inspection
+for more than 120 seconds, so suspended time cannot silently count as observed uptime.
+The live report includes the maximum sample gap, source revision and dirty flag,
+architecture, tool versions, and SHA-256 hashes for all three built binaries. Keep the
+source read-only and put the report in a separate bind-mounted directory, for example:
 
 ```bash
 repo="$PWD"

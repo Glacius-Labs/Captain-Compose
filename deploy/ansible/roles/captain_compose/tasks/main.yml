@@ -125,7 +125,7 @@
   ansible.builtin.shell: |
     set -eu
     expected=$(awk -v name='{{ captain_compose_release_archive }}' '$2 == name || $2 == "*" name { n++; value=$1 } END { if (n == 1) print value }' checksums.txt)
-    test "${#expected}" -eq 64
+    printf '%s\n' "$expected" | grep -Eq '^[0-9a-f]{64}$'
     printf '%s  %s\n' "$expected" '{{ captain_compose_release_archive }}' | sha256sum --check --status
   args:
     chdir: "{{ captain_compose_release_tmp.path }}"
