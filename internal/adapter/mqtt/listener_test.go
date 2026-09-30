@@ -267,6 +267,75 @@ func TestAckOnlyAfterPersistenceAndRejectRetained(t *testing.T) {
 	require.False(t, m.ack)
 }
 
+func TestCapacityDefersMessageUntilOutboxDrainsThenAcknowledges(t *testing.T) {
+	rt := &v2RuntimeStub{}
+	pub := &v2Publisher{events: make(chan deployment.Event, maxPending+1)}
+	l, err := NewListener("commands", t.TempDir(), rt, pub)
+	require.NoError(t, err)
+	defer l.Close()
+	for i := 0; i < maxPending-reservedQueryCapacity; i++ {
+		e := v2Command(t, "remove", "web")
+		require.NoError(t, l.journal.enqueue(e))
+		event := deployment.Event{Version: 2, ID: uuid.New(), RequestID: e.ID, Timestamp: time.Now().UTC(), Action: "remove", Name: "web", Success: true, Code: "ok", Message: "Operation completed"}
+		now := time.Now().UTC()
+		require.NoError(t, l.journal.saveEvent(e.ID, event, &now, true))
+	}
+	e := v2Command(t, "remove", "later")
+	b, err := json.Marshal(e)
+	require.NoError(t, err)
+	m := &message{payload: b, qos: 1}
+	l.HandleMessage(nil, m)
+	require.False(t, m.ack)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pub.cancel = cancel
+	pub.cancelRequestID = e.ID
+	require.NoError(t, l.Start(ctx))
+	require.True(t, m.ack)
+	_, found := l.journal.find(e.ID)
+	require.True(t, found)
+}
+
+func TestDeferredQueueOverflowStopsOnlyAfterQueuedMessagesPersist(t *testing.T) {
+	pub := &v2Publisher{events: make(chan deployment.Event, 200)}
+	l, err := NewListener("commands", t.TempDir(), &v2RuntimeStub{}, pub)
+	require.NoError(t, err)
+	defer l.Close()
+	for i := 0; i < maxPending-reservedQueryCapacity; i++ {
+		e := v2Command(t, "remove", "web")
+		require.NoError(t, l.journal.enqueue(e))
+		event := deployment.Event{Version: 2, ID: uuid.New(), RequestID: e.ID, Timestamp: time.Now().UTC(), Action: "remove", Name: "web", Success: true, Code: "ok", Message: "Operation completed"}
+		now := time.Now().UTC()
+		require.NoError(t, l.journal.saveEvent(e.ID, event, &now, true))
+	}
+	queued := make([]*message, deferredCapacity+1)
+	ids := make([]string, deferredCapacity)
+	for i := range queued {
+		e := v2Command(t, "remove", "later")
+		if i < deferredCapacity {
+			ids[i] = e.ID
+		}
+		b, err := json.Marshal(e)
+		require.NoError(t, err)
+		queued[i] = &message{payload: b, qos: 1}
+		l.HandleMessage(nil, queued[i])
+	}
+	for i := 0; i < deferredCapacity; i++ {
+		require.False(t, queued[i].ack)
+	}
+	require.False(t, queued[deferredCapacity].ack)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.ErrorIs(t, l.Start(ctx), ErrDeferredOverflow)
+	for i := 0; i < deferredCapacity; i++ {
+		require.True(t, queued[i].ack)
+		_, found := l.journal.find(ids[i])
+		require.True(t, found)
+	}
+	require.False(t, queued[deferredCapacity].ack)
+}
+
 type resultPublisher struct {
 	events chan deployment.Event
 	fail   bool

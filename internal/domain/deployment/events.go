@@ -8,6 +8,7 @@ import (
 )
 
 type Event struct {
+	Version   int               `json:"version,omitempty"`
 	RequestID string            `json:"request_id,omitempty"`
 	ID        uuid.UUID         `json:"id"`
 	Timestamp time.Time         `json:"timestamp"`
@@ -16,6 +17,8 @@ type Event struct {
 	Success   bool              `json:"success"`
 	Message   string            `json:"message"`
 	Labels    map[string]string `json:"labels"`
+	Code      string            `json:"code,omitempty"`
+	Data      any               `json:"data,omitempty"`
 }
 
 const (

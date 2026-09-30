@@ -3,7 +3,7 @@
 Install the Go version from `go.mod`. Run:
 
 ```bash
-gofmt -w cmd internal
+gofmt -w cmd internal tests
 go mod tidy
 go test -race ./...
 go vet ./...
@@ -25,3 +25,16 @@ For release maintenance, run `bash scripts/release.sh X.Y.Z`, inspect the archiv
 workflow repeats CI, builds six archives, attests them and creates a **draft** GitHub
 release. Review the notes and assets before publishing. Do not replace existing version
 tags/assets.
+
+Protocol changes must pass both the Go decoder fixtures and JSON Schema validation:
+
+```bash
+python3 -m venv bin/contract-venv
+bin/contract-venv/bin/python -m pip install jsonschema==4.26.0
+bin/contract-venv/bin/python tests/contracts/check_schema.py
+```
+
+Linux CI also runs ShellCheck, Ansible convergence, lifecycle
+failure injection and the disposable pilot described in `docs/pilot.md`. A longer
+pilot reports elapsed observation separately from setup; never infer multi-day
+acceptance from a shorter run.

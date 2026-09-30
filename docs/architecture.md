@@ -14,13 +14,16 @@ engine. This is a trusted administration channel, not a multi-tenant sandbox.
 - `internal/app/deployment` owns create/remove orchestration and result events.
 - `internal/domain/deployment` defines ports, events and input invariants.
 - `internal/adapter/docker` owns manifest persistence and Docker Compose execution.
+- `internal/control` defines the version 2 operation and observation contract.
+- `internal/operator` and `cmd/captain-compose` own the operator workflow and exact
+  request replay; they have no direct Docker access.
+- `internal/observability` exposes loopback-only, read-only cached observations.
 
-The callback stores a valid command before acknowledging QoS 1. A single worker
-processes accepted commands by a persisted enqueue sequence, independent of wall-clock
-adjustments. It stores the result before
-publishing it at QoS 1. After broker acknowledgement, it stores a completed receipt
-and removes the original command payload from that receipt. The broker session is
-persistent, and the exact topic is resubscribed after every reconnect.
+The callback stores a valid command before acknowledging QoS 1. A serial mutation
+worker preserves persisted enqueue order, independent of wall-clock adjustments.
+Queries and result delivery have separate bounded workers. Results are persisted
+before publication and their delivery is recorded after broker acknowledgement.
+The broker session is persistent, and the exact topic is resubscribed after every reconnect.
 
 ## Guarantees and limits
 
@@ -34,10 +37,13 @@ operation. There is no transaction spanning Docker and the journal. Apply/remove
 converge on project state; exactly-once execution of application side effects is
 not guaranteed. Do not use this agent for non-idempotent one-off jobs.
 
-There is one in-flight operation, at most 128 pending commands, and at most 10,000
-receipts. Completed receipts expire after seven days. An unavailable event broker
-blocks subsequent commands, preserving order. Bound publisher rates and alert on
-delivery backlog. Disk errors fail closed. Keep state on a local durable filesystem;
+There is one in-flight mutation. Pending commands and undelivered results share a
+bounded budget, with capacity reserved for diagnostic queries. Mutation receipts are
+retained for seven days; query receipts have a separate, shorter retention and capacity.
+Undelivered results do not expire. See the protocol guide for exact limits.
+An unavailable event broker does not block execution of already accepted commands
+until capacity is exhausted. Bound publisher rates and alert on delivery backlog.
+Disk errors fail closed. Keep state on a local durable filesystem;
 network shares and multiple processes sharing state are unsupported.
 
 The state lock prevents two local agent processes from sharing a directory. It does
@@ -61,6 +67,10 @@ Compose validates and normalizes a request before replacing its manifest. The
 manifest is saved before `up --wait --remove-orphans`, including when startup fails
 partially. `success: true` means Compose observed services running/healthy; meaningful
 application readiness requires service healthchecks. There is no automatic rollback.
+Version 2 plans expose service changes and warnings without returning submitted secrets.
+Revision preconditions detect concurrent changes; persisted request identity allows an
+interrupted operation to recognize its own prior intent. Expiry rejects a mutation
+that has not durably started; it does not promise to undo an already started operation.
 An update removes services omitted from the new manifest. Removal uses the saved
 manifest with `down --remove-orphans`, preserving named and anonymous volumes.
 
@@ -74,7 +84,12 @@ permission to terminate the CLI's descendants, as provided in normal local execu
 
 ## Storage
 
-`state_dir/deployments/<name>/compose.json` contains the latest normalized intent.
+Legacy `state_dir/deployments/<name>/compose.json` is read during upgrade.
+Version 2 `state_dir/deployments/<name>/state.json` is the authoritative deployment
+record: desired and last successful revision, operation identity, phase and bounded
+revision history. History contains private Compose configuration and must be protected
+with the same controls as the active manifest. Old binaries cannot interpret the new
+deployment state: restore the complete pre-upgrade backup for a binary downgrade.
 `state_dir/journal/<hash>.json` contains pending commands or completed receipts.
 Files are written with restrictive permissions using write, fsync, and atomic rename;
 the MQTT journal and deployment-manifest directories are synced on Unix. `os.OpenRoot` confines access.

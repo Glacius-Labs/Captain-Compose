@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glacius-labs/captain-compose/internal/observability"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -19,6 +20,8 @@ type Config struct {
 	Log              LogConfig     `yaml:"log"`
 	ListenerTopic    string        `yaml:"listener_topic"`
 	PublisherTopic   string        `yaml:"publisher_topic"`
+	StatusTopic      string        `yaml:"status_topic"`
+	MonitorListen    string        `yaml:"monitor_listen"`
 }
 
 type MQTTConfig struct {
@@ -80,6 +83,12 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func (c Config) Validate() error {
+	if err := observability.ValidateListen(c.MonitorListen); err != nil {
+		return err
+	}
+	if c.StatusTopic != "" && (len(c.StatusTopic) > 65535 || strings.ContainsAny(c.StatusTopic, "+#\x00") || c.StatusTopic == c.ListenerTopic || c.StatusTopic == c.PublisherTopic) {
+		return fmt.Errorf("status_topic must be a distinct exact MQTT topic")
+	}
 	if strings.TrimSpace(c.StateDir) == "" {
 		return fmt.Errorf("state_dir is required")
 	}

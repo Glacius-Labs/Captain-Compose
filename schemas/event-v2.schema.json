@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glacius-labs.github.io/captain-compose/schemas/event-v2.schema.json",
+  "title": "Captain Compose MQTT event v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "request_id", "timestamp", "action", "name", "success", "message", "code"],
+  "properties": {
+    "version": {"const": 2},
+    "id": {"type": "string", "format": "uuid", "not": {"pattern": "^00000000-0000-0000-0000-000000000000$"}},
+    "request_id": {"type": "string", "format": "uuid", "not": {"pattern": "^00000000-0000-0000-0000-000000000000$"}},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "action": {"enum": ["create", "remove", "plan", "status", "inspect", "doctor", "revert", "result"]},
+    "name": {"type": "string"},
+    "success": {"type": "boolean"},
+    "message": {"type": "string"},
+    "labels": {"type": ["object", "null"], "additionalProperties": {"type": "string"}},
+    "code": {"type": "string", "minLength": 1},
+    "data": {}
+  }
+}

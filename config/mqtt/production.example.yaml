@@ -1,4 +1,7 @@
 state_dir: /var/lib/captain-compose
+monitor_listen: 127.0.0.1:9080
+# Optional heartbeat; grant the agent publish permission on this exact topic.
+# status_topic: captain-compose/your-node/status
 operation_timeout: 5m
 listener_topic: captain-compose/node-01/commands
 publisher_topic: captain-compose/node-01/events

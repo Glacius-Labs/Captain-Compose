@@ -43,8 +43,14 @@ func (r *runtime) Check(ctx context.Context) error {
 	if _, err := r.run(ctx, nil, "info", "--format", "{{.ServerVersion}}"); err != nil {
 		return err
 	}
-	_, err := r.run(ctx, nil, "compose", "version", "--short")
-	return err
+	version, err := r.run(ctx, nil, "compose", "version", "--short")
+	if err != nil {
+		return err
+	}
+	if !supportedComposeVersion(string(version)) {
+		return fmt.Errorf("Docker Compose 2.20 or newer is required")
+	}
+	return nil
 }
 
 // List reports this agent's persisted deployment intents, including failed applies.
@@ -108,11 +114,37 @@ func (r *runtime) Deploy(ctx context.Context, d deployment.Deployment, payload [
 	if err != nil {
 		return err
 	}
-	// Save before apply so failed/partial deployments remain removable after restart.
-	if _, err := r.store.save(d, canonical); err != nil {
+	state, stateErr := r.store.readState(d.Name)
+	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
+		return fmt.Errorf("read deployment state: %w", stateErr)
+	}
+	if state.Name == "" {
+		state = deploymentState{Version: 2, Name: d.Name, Phase: "absent"}
+	}
+	revision := revisionOf(canonical)
+	if len(state.Compose) > 0 && state.DesiredRevision != revision {
+		archiveCurrent(&state)
+	}
+	state.DesiredRevision, state.Compose = revision, canonical
+	state.DesiredCreatedAt = time.Now().UTC()
+	state.Phase, state.LastAction, state.LastRequestID = "applying", "create", ""
+	state.HasExpectedRevision, state.LastExpectedRevision = false, ""
+	state.UpdatedAt = time.Now().UTC()
+	if err := r.store.saveState(state); err != nil {
 		return fmt.Errorf("persist compose: %w", err)
 	}
 	_, err = r.run(ctx, canonical, append(args, "up", "--detach", "--wait", "--remove-orphans", "--wait-timeout", fmt.Sprint(max(1, int(r.timeout.Seconds()))))...)
+	if err != nil {
+		state.Phase, state.UpdatedAt = "failed", time.Now().UTC()
+		if persistErr := r.store.saveState(state); persistErr != nil {
+			return fmt.Errorf("deployment failed and failure state could not be saved")
+		}
+		return err
+	}
+	state.SuccessfulRevision, state.Phase, state.UpdatedAt = revision, "active", time.Now().UTC()
+	if err := r.store.saveState(state); err != nil {
+		return fmt.Errorf("persist successful compose result: %w", err)
+	}
 	return err
 }
 
@@ -124,17 +156,34 @@ func (r *runtime) Remove(ctx context.Context, name string) error {
 	defer r.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
-	payload, err := r.store.read(name)
-	if errors.Is(err, os.ErrNotExist) {
+	state, err := r.store.readState(name)
+	if errors.Is(err, os.ErrNotExist) || (err == nil && state.Phase == "removed") {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if _, err := r.run(ctx, payload, append(composeArgs(name), "down", "--remove-orphans")...); err != nil {
-		return err
+	state.Phase, state.LastAction, state.LastRequestID = "removing", "remove", ""
+	state.HasExpectedRevision, state.LastExpectedRevision = false, ""
+	state.UpdatedAt = time.Now().UTC()
+	if err := r.store.saveState(state); err != nil {
+		return fmt.Errorf("persist removal intent: %w", err)
 	}
-	return r.store.remove(name)
+	if len(state.Compose) > 0 {
+		if _, err := r.run(ctx, state.Compose, append(composeArgs(name), "down", "--remove-orphans")...); err != nil {
+			state.Phase, state.UpdatedAt = "failed", time.Now().UTC()
+			if persistErr := r.store.saveState(state); persistErr != nil {
+				return fmt.Errorf("removal failed and failure state could not be saved")
+			}
+			return err
+		}
+	}
+	if len(state.Compose) > 0 {
+		archiveCurrent(&state)
+	}
+	state.Phase, state.DesiredRevision, state.Compose = "removed", "", nil
+	state.UpdatedAt = time.Now().UTC()
+	return r.store.saveState(state)
 }
 
 func composeArgs(name string) []string {
@@ -210,6 +259,46 @@ type limitedBuffer struct {
 	limit  int
 }
 
+type diagnosticBuffer struct {
+	buffer bytes.Buffer
+	limit  int
+}
+
+func (b *diagnosticBuffer) Write(p []byte) (int, error) {
+	n := len(p)
+	remaining := b.limit - b.buffer.Len()
+	if remaining > 0 {
+		_, _ = b.buffer.Write(p[:min(len(p), remaining)])
+	}
+	return n, nil
+}
+
+type commandFailure struct {
+	code  string
+	cause error
+}
+
+func (e *commandFailure) Error() string { return "docker command failed" }
+func (e *commandFailure) Unwrap() error { return e.cause }
+
+func classifyDockerDiagnostic(stderr string) string {
+	s := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(s, "unauthorized"), strings.Contains(s, "authentication required"), strings.Contains(s, "denied: requested access"):
+		return "registry_denied"
+	case strings.Contains(s, "manifest unknown"), strings.Contains(s, "pull access denied"), strings.Contains(s, "not found: manifest"):
+		return "image_unavailable"
+	case strings.Contains(s, "no space left on device"):
+		return "disk_full"
+	case strings.Contains(s, "port is already allocated"), strings.Contains(s, "address already in use"):
+		return "port_in_use"
+	case strings.Contains(s, "no such host"), strings.Contains(s, "connection refused"), strings.Contains(s, "i/o timeout"), strings.Contains(s, "tls handshake timeout"):
+		return "registry_unreachable"
+	default:
+		return ""
+	}
+}
+
 func (b *limitedBuffer) Write(p []byte) (int, error) {
 	n := len(p)
 	if b.buffer.Len()+n > b.limit {
@@ -230,14 +319,15 @@ func execute(ctx context.Context, input []byte, args ...string) ([]byte, error) 
 		}
 	}
 	var output = limitedBuffer{limit: 4 * deployment.MaxPayloadBytes}
+	var diagnostic = diagnosticBuffer{limit: 8 * 1024}
 	cmd.Stdout = &output
-	cmd.Stderr = io.Discard // Compose diagnostics can contain secrets from the manifest.
+	cmd.Stderr = &diagnostic // Capture a bounded private buffer only for fixed classification.
 	cmd.WaitDelay = 5 * time.Second
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("docker operation interrupted: %w", ctx.Err())
 		}
-		return nil, fmt.Errorf("docker operation failed: %w (inspect the workload with docker compose)", err)
+		return nil, &commandFailure{code: classifyDockerDiagnostic(diagnostic.buffer.String()), cause: err}
 	}
 	return output.buffer.Bytes(), nil
 }

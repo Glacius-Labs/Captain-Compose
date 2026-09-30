@@ -34,8 +34,25 @@ jobs:
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
         with:
           subject-path: ${{ env.RELEASE_ASSET_DIR }}/*
+      - name: Export offline verification bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RELEASE_ASSET_DIR/offline"
+          for asset in "$RELEASE_ASSET_DIR"/*.tar.gz "$RELEASE_ASSET_DIR"/*.zip; do
+            digest=$(sha256sum "$asset" | cut -d ' ' -f 1)
+            bundle="sha256:$digest.jsonl"
+            for attempt in {1..8}; do
+              gh attestation download "$asset" --repo "$GITHUB_REPOSITORY" --limit 10 || true
+              [[ -s "$bundle" ]] && break
+              sleep 3
+            done
+            [[ -s "$bundle" ]] || { echo "Attestation bundle is unavailable for $(basename "$asset")" >&2; exit 1; }
+            mv -- "$bundle" "$RELEASE_ASSET_DIR/offline/$(basename "$asset").jsonl"
+          done
+          gh attestation trusted-root > "$RELEASE_ASSET_DIR/offline/trusted_root.jsonl"
       - name: Publish draft release for final review
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$RELEASE_ASSET_DIR"/* --verify-tag --draft --generate-notes --title "Captain Compose $GITHUB_REF_NAME"
+          gh release create "$GITHUB_REF_NAME" "$RELEASE_ASSET_DIR"/*.tar.gz "$RELEASE_ASSET_DIR"/*.zip "$RELEASE_ASSET_DIR"/checksums.txt "$RELEASE_ASSET_DIR"/offline/* --verify-tag --draft --generate-notes --title "Captain Compose $GITHUB_REF_NAME"

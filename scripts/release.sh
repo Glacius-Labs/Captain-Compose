@@ -32,10 +32,18 @@ for os in linux darwin windows; do
     binary=captain-compose-mqtt
     [[ "$os" != windows ]] || binary+=.exe
     CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X main.version=$version -X main.commit=$commit -X main.buildDate=$date" -o "$stage/$binary" ./cmd/captain-compose-mqtt
+    cli_binary=captain-compose
+    [[ "$os" != windows ]] || cli_binary+=.exe
+    if [[ -d cmd/captain-compose ]]; then
+      CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X main.version=$version -X main.commit=$commit -X main.buildDate=$date" -o "$stage/$cli_binary" ./cmd/captain-compose
+    else
+      echo 'Missing operator CLI source at cmd/captain-compose' >&2
+      exit 1
+    fi
     cp LICENSE README.md SECURITY.md CONTRIBUTING.md CHANGELOG.md captain-compose-banner.png "$stage/"
     mkdir -p "$stage/scripts"
-    cp scripts/install.sh scripts/provision.sh scripts/provision-lib.sh "$stage/scripts/"
-    cp -R docs config "$stage/"
+    cp scripts/install.sh scripts/provision.sh scripts/provision-lib.sh scripts/backup.sh scripts/restore.sh scripts/upgrade.sh scripts/archive-safety.py "$stage/scripts/"
+    cp -R docs config schemas deploy "$stage/"
     archive="captain-compose_${version}_${os}_${arch}"
     if [[ "$os" == windows ]]; then
       (cd "$stage" && zip -qr "$stage_output/$archive.zip" .)

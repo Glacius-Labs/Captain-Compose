@@ -56,3 +56,18 @@ func TestConfigurationRejectsTyposAndUnsafeSettings(t *testing.T) {
 	_, err = newTLSConfig(TLSConfig{ClientCertPath: "only-cert"})
 	require.Error(t, err)
 }
+
+func TestMonitoringConfigurationBoundary(t *testing.T) {
+	c, err := loadTestConfig(t, minimalConfig)
+	require.NoError(t, err)
+	c.MonitorListen = "127.0.0.1:9080"
+	c.StatusTopic = "captain/node/status"
+	require.NoError(t, c.Validate())
+	c.MonitorListen = "0.0.0.0:9080"
+	require.Error(t, c.Validate())
+	c.MonitorListen = ""
+	c.StatusTopic = c.ListenerTopic
+	require.Error(t, c.Validate())
+	c.StatusTopic = "captain/#"
+	require.Error(t, c.Validate())
+}

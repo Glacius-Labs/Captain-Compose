@@ -16,8 +16,14 @@ import (
 )
 
 const maxPending = 128
+const reservedQueryCapacity = 16
 const maxReceipts = 10000
 const receiptRetention = 7 * 24 * time.Hour
+const maxQueryReceipts = 1000
+const queryReceiptRetention = 10 * time.Minute
+const MaxEventBytes = 256 * 1024
+
+var ErrCapacity = errors.New("journal capacity reached")
 
 var ErrIDConflict = errors.New("request id reused with different content")
 
@@ -29,6 +35,9 @@ type record struct {
 	Command   *Envelope         `json:"command,omitempty"`
 	Event     *deployment.Event `json:"event,omitempty"`
 	Completed *time.Time        `json:"completed,omitempty"`
+	Started   *time.Time        `json:"started,omitempty"`
+	Delivered *time.Time        `json:"delivered,omitempty"`
+	Query     bool              `json:"query,omitempty"`
 }
 
 type journal struct {
@@ -99,7 +108,7 @@ func openJournal(dir string) (*journal, error) {
 }
 
 func validateRecord(rec record) error {
-	if rec.Sequence == 0 || rec.Received.IsZero() || (rec.Completed != nil && rec.Event == nil) {
+	if rec.Sequence == 0 || rec.Received.IsZero() || (rec.Completed != nil && rec.Event == nil) || (rec.Delivered != nil && rec.Event == nil) {
 		return fmt.Errorf("missing receipt metadata")
 	}
 	if rec.Event != nil && (rec.Event.RequestID != rec.ID || rec.Event.ID.String() == "00000000-0000-0000-0000-000000000000" || rec.Event.Action == "") {
@@ -167,8 +176,22 @@ func (j *journal) save(rec record) (err error) {
 }
 
 func (j *journal) prune() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.pruneLocked()
+}
+
+func (j *journal) pruneLocked() error {
 	for id, r := range j.records {
-		if r.Completed != nil && time.Since(*r.Completed) > receiptRetention {
+		retainedAt := r.Delivered
+		if retainedAt == nil && (r.Event == nil || r.Event.Version != 2) {
+			retainedAt = r.Completed
+		}
+		retention := receiptRetention
+		if r.Query {
+			retention = queryReceiptRetention
+		}
+		if retainedAt != nil && time.Since(*retainedAt) > retention {
 			if err := j.root.Remove(journalName(id)); err != nil {
 				j.failed = err
 				return err
@@ -185,7 +208,7 @@ func (j *journal) enqueue(e Envelope) error {
 	if j.failed != nil {
 		return fmt.Errorf("journal is unavailable after a persistence failure: %w", j.failed)
 	}
-	if err := j.prune(); err != nil {
+	if err := j.pruneLocked(); err != nil {
 		return err
 	}
 	b, _ := json.Marshal(e)
@@ -195,34 +218,76 @@ func (j *journal) enqueue(e Envelope) error {
 		if existing.Hash != digest {
 			return ErrIDConflict
 		}
+		// Version 2 retries can recover a result after the controller missed its
+		// publication. Version 1 keeps its original no-republish behavior.
+		if e.Version == 2 && existing.Event != nil && existing.Delivered != nil {
+			if j.pendingCount(existing.Query) >= j.capacity(existing.Query) {
+				return ErrCapacity
+			}
+			existing.Delivered = nil
+			return j.save(existing)
+		}
 		return nil
 	}
-	pending := 0
+	query := e.Version == 2 && isQueryAction(e.Type)
+	if j.pendingCount(query) >= j.capacity(query) {
+		return ErrCapacity
+	}
+	receipts := 0
+	queryReceipts := 0
 	for _, r := range j.records {
-		if r.Completed == nil {
-			pending++
+		if r.Query {
+			queryReceipts++
+		} else {
+			receipts++
 		}
 	}
-	if pending >= maxPending || len(j.records) >= maxReceipts {
-		return fmt.Errorf("journal capacity reached; wait for processing or receipt retention expiry")
+	if (!query && receipts >= maxReceipts) || (query && queryReceipts >= maxQueryReceipts) {
+		return ErrCapacity
 	}
 	if j.sequence == ^uint64(0) {
 		return fmt.Errorf("journal sequence exhausted")
 	}
 	seq := j.sequence + 1
-	if err := j.save(record{ID: e.ID, Hash: digest, Sequence: seq, Received: time.Now().UTC(), Command: &e}); err != nil {
+	if err := j.save(record{ID: e.ID, Hash: digest, Sequence: seq, Received: time.Now().UTC(), Command: &e, Query: query}); err != nil {
 		return err
 	}
 	j.sequence = seq
 	return nil
 }
 
-func (j *journal) next() (record, bool) {
+func (j *journal) capacity(query bool) int {
+	if query {
+		return reservedQueryCapacity
+	}
+	return maxPending - reservedQueryCapacity
+}
+
+func (j *journal) pendingCount(query bool) int {
+	n := 0
+	for _, r := range j.records {
+		if r.Query == query && (r.Event == nil || (r.Delivered == nil && (r.Event.Version == 2 || r.Completed == nil))) {
+			n++
+		}
+	}
+	return n
+}
+
+func isQueryAction(action string) bool {
+	switch action {
+	case "plan", "status", "inspect", "doctor", "result":
+		return true
+	default:
+		return false
+	}
+}
+
+func (j *journal) nextExecution() (record, bool) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	var pending []record
 	for _, r := range j.records {
-		if r.Completed == nil {
+		if r.Event == nil && !r.Query {
 			pending = append(pending, r)
 		}
 	}
@@ -231,6 +296,93 @@ func (j *journal) next() (record, bool) {
 		return record{}, false
 	}
 	return pending[0], true
+}
+
+func (j *journal) nextQuery() (record, bool) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	var pending []record
+	for _, r := range j.records {
+		if r.Event == nil && r.Query {
+			pending = append(pending, r)
+		}
+	}
+	sort.Slice(pending, func(i, k int) bool { return pending[i].Sequence < pending[k].Sequence })
+	if len(pending) == 0 {
+		return record{}, false
+	}
+	return pending[0], true
+}
+
+// next is kept for legacy journal tests and callers; execution selection is unchanged.
+func (j *journal) next() (record, bool) { return j.nextExecution() }
+
+func (j *journal) nextOutbox() (record, bool) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	var pending []record
+	for _, r := range j.records {
+		if r.Event != nil && r.Delivered == nil && (r.Event.Version == 2 || r.Completed == nil) {
+			pending = append(pending, r)
+		}
+	}
+	sort.Slice(pending, func(i, k int) bool { return pending[i].Sequence < pending[k].Sequence })
+	if len(pending) == 0 {
+		return record{}, false
+	}
+	return pending[0], true
+}
+
+func (j *journal) find(id string) (record, bool) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	r, ok := j.records[id]
+	return r, ok
+}
+
+func (j *journal) markStarted(id string, now time.Time) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	rec, ok := j.records[id]
+	if !ok {
+		return fmt.Errorf("request disappeared from journal")
+	}
+	if rec.Started == nil {
+		rec.Started = &now
+	}
+	return j.save(rec)
+}
+
+func (j *journal) saveEvent(id string, event deployment.Event, completed *time.Time, pruneCommand bool) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	rec, ok := j.records[id]
+	if !ok {
+		return fmt.Errorf("request disappeared from journal")
+	}
+	rec.Event = &event
+	if completed != nil {
+		rec.Completed = completed
+	}
+	if pruneCommand {
+		rec.Command = nil
+	}
+	return j.save(rec)
+}
+
+func (j *journal) markDelivered(id string, now time.Time) error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	rec, ok := j.records[id]
+	if !ok || rec.Event == nil {
+		return fmt.Errorf("result disappeared from journal")
+	}
+	rec.Delivered = &now
+	if rec.Event.Version != 2 {
+		rec.Completed = &now
+		rec.Command = nil
+	}
+	return j.save(rec)
 }
 
 func (j *journal) update(rec record) error { j.mu.Lock(); defer j.mu.Unlock(); return j.save(rec) }

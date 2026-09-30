@@ -1,0 +1,22 @@
+environments:
+  production:
+    broker_url: ssl://mqtt.example.com:8883
+    command_topic: captain-compose/node-01/commands
+    event_topic: captain-compose/node-01/events
+    username: operator-node-01
+    password_file: /etc/captain-compose/operator-password
+    tls:
+      ca_cert_path: /etc/captain-compose/ca.pem
+      # Optional mutual TLS:
+      # client_cert_path: /etc/captain-compose/operator.pem
+      # client_key_path: /etc/captain-compose/operator.key
+    timeout: 5m
+    retry_interval: 10s
+
+  # Explicit development-only example; production must use verified TLS.
+  local:
+    broker_url: tcp://127.0.0.1:1883
+    command_topic: captain-compose/dev-node/commands
+    event_topic: captain-compose/dev-node/events
+    allow_insecure: true
+    timeout: 2m

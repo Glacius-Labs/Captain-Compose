@@ -2,17 +2,37 @@
 set -euo pipefail
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
-mkdir -p "$work/source" "$work/releases" "$work/bin"
-printf '#!/bin/sh\necho captain-compose-mqtt test\n' > "$work/source/captain-compose-mqtt"
+mkdir -p "$work/source" "$work/releases" "$work/bin" "$work/fakebin"
+for binary in captain-compose-mqtt captain-compose; do
+  printf '#!/bin/sh\necho "%s 0.0.0-test (test, test)"\n' "$binary" > "$work/source/$binary"
+done
 archive=captain-compose_0.0.0-test_linux_amd64.tar.gz
 tar -czf "$work/releases/$archive" -C "$work/source" .
 (cd "$work/releases" && sha256sum "$archive" > checksums.txt)
-bash scripts/install.sh --version 0.0.0-test --prefix "$work/bin" --archive-dir "$work/releases"
+bash scripts/install.sh --version 0.0.0-test --prefix "$work/bin" --archive-dir "$work/releases" --checksum-only
 test -x "$work/bin/captain-compose-mqtt"
-before=$(sha256sum "$work/bin/captain-compose-mqtt")
+test -x "$work/bin/captain-compose"
+before_mqtt=$(sha256sum "$work/bin/captain-compose-mqtt")
+before_cli=$(sha256sum "$work/bin/captain-compose")
+
+# Provenance is mandatory by default even when the checksums match.
+cat > "$work/fakebin/gh" <<'GH'
+#!/usr/bin/env bash
+echo "simulated missing or invalid attestation" >&2
+exit 1
+GH
+chmod +x "$work/fakebin/gh"
+if PATH="$work/fakebin:$PATH" bash scripts/install.sh --version 0.0.0-test --prefix "$work/bin" --archive-dir "$work/releases" > "$work/provenance.log" 2>&1; then
+  echo 'Invalid provenance was accepted' >&2
+  exit 1
+fi
+grep -q 'simulated missing or invalid attestation' "$work/provenance.log"
+test "$before_mqtt" = "$(sha256sum "$work/bin/captain-compose-mqtt")"
+test "$before_cli" = "$(sha256sum "$work/bin/captain-compose")"
+
 printf corrupt >> "$work/releases/$archive"
-if bash scripts/install.sh --version 0.0.0-test --prefix "$work/bin" --archive-dir "$work/releases"; then echo 'Checksum rejection failed' >&2; exit 1; fi
-test "$before" = "$(sha256sum "$work/bin/captain-compose-mqtt")"
+if bash scripts/install.sh --version 0.0.0-test --prefix "$work/bin" --archive-dir "$work/releases" --checksum-only; then echo 'Checksum rejection failed' >&2; exit 1; fi
+test "$before_mqtt" = "$(sha256sum "$work/bin/captain-compose-mqtt")"
 bash scripts/provision.sh --config config/mqtt/config.example.yaml --dry-run
 
 source scripts/provision-lib.sh

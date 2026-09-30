@@ -1,0 +1,18 @@
+---
+captain_compose_version: 1.1.0-rc.1
+captain_compose_release_repository: Glacius-Labs/Captain-Compose
+captain_compose_archive_source: ""
+captain_compose_checksums_source: ""
+captain_compose_install_prefix: /usr/local/bin
+captain_compose_config_source: ""
+captain_compose_docker_config_source: ""
+captain_compose_managed_secret_files: []
+captain_compose_start_service: true
+captain_compose_verify_provenance: true
+captain_compose_offline_attestation_bundle: ""
+captain_compose_offline_trusted_root: ""
+captain_compose_user: captain-compose
+captain_compose_group: captain-compose
+captain_compose_state_directory: /var/lib/captain-compose
+captain_compose_config_directory: /etc/captain-compose
+captain_compose_min_compose_version: 2.20.0

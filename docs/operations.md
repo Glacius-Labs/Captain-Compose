@@ -10,25 +10,44 @@ open firewall ports, create cloud resources, or alter existing workloads.
 ## Install a release
 
 Download `scripts/install.sh` from a reviewed repository tag or extract a release
-archive, then run from its root:
+archive, then run:
 
 ```bash
-bash scripts/install.sh --version 1.0.0 --prefix "$HOME/.local/bin"
+bash scripts/install.sh --version 1.1.0-rc.1 --prefix "$HOME/.local/bin"
 captain-compose-mqtt --version
+captain-compose --version
 ```
 
 The version is an example; choose an actually published release. Installation
-requires an explicit version and checks the archive against the release SHA-256
-manifest before replacing the executable. `--archive-dir /path/to/assets` supports
-offline installation with both the archive and `checksums.txt`. Releases contain
+requires an explicit version, checks the archive against the release SHA-256
+manifest, and verifies a GitHub artifact attestation for the exact tag and release
+workflow before replacing either executable. It installs both `captain-compose-mqtt`
+and `captain-compose` from the same archive. `--archive-dir /path/to/assets` supplies
+the archive and `checksums.txt`. Releases contain
 Linux/macOS tarballs and Windows ZIPs for amd64 and arm64. On Windows, compare
-`Get-FileHash -Algorithm SHA256` with the manifest, extract the ZIP, and run the EXE.
+`Get-FileHash -Algorithm SHA256` with the manifest, verify provenance, then extract
+the ZIP and run both EXEs:
 
-Checksums detect corruption. Verify provenance separately when using GitHub CLI:
+```powershell
+gh attestation verify .\captain-compose_1.1.0-rc.1_windows_amd64.zip `
+  --repo Glacius-Labs/Captain-Compose `
+  --signer-workflow Glacius-Labs/Captain-Compose/.github/workflows/release.yml `
+  --source-ref refs/tags/v1.1.0-rc.1 --deny-self-hosted-runners
+```
+
+Checksums detect corruption; the signed provenance check establishes the expected
+GitHub repository, release workflow, and version tag. GitHub CLI (`gh`) must be
+installed for online verification. A release includes per-archive `.jsonl` bundle
+files and `trusted_root.jsonl` under its `offline` assets for disconnected installs:
 
 ```bash
-gh attestation verify captain-compose_1.0.0_linux_amd64.tar.gz --repo Glacius-Labs/Captain-Compose
+bash scripts/install.sh --version 1.1.0-rc.1 --archive-dir ./release-assets \
+  --attestation-dir ./release-assets/offline
 ```
+
+For a controlled bootstrap where signed provenance cannot yet be checked, pass
+`--checksum-only` explicitly. This verifies only the checksum manifest and provides
+no publisher identity guarantee. Never use this mode for routine production upgrades.
 
 ## Provision a Linux service
 
@@ -50,7 +69,10 @@ sudo journalctl -u captain-compose.service -f
 
 Provisioning is repeatable: it preserves existing configuration contents, secures an
 existing config as `root:captain-compose` mode `0640`, creates the system user, grants
-Docker group access, installs the unit, and enables it. Symlinked or non-regular config
+Docker group access, creates a root-owned `/etc/captain-compose/docker` for explicitly
+managed registry credentials, installs the unit, and enables it. The service sets
+`DOCKER_CONFIG` to that directory; Docker credentials are not taken from root's home.
+Symlinked or non-regular config
 destinations are rejected. Starting is explicit. The unit restarts failed processes and
 stops the agent on SIGTERM without tearing down workloads. `--start` stops any running
 agent before preflight to release its state lock, then restarts it. A failed preflight
@@ -76,20 +98,42 @@ client ID between agents. Preserve the client ID across restarts for broker sess
 ## Recovery and upgrades
 
 - Stop the service and back up state, configuration and workload data before upgrades.
-- Install the new pinned binary, run preflight, restart, and inspect logs and events.
-- Roll back by reinstalling the previous binary only if its documented state/protocol
-  format is compatible. The prototype is **not** a compatible rollback target.
+- Install the new pinned release with `scripts/upgrade.sh`, which verifies provenance,
+  stops the service, runs a Docker/configuration preflight and returns the service to
+  its previous active state when the check succeeds.
+- Version 1.1 state cannot be downgraded directly to 1.0. Preserve the complete
+  pre-upgrade backup; to return to 1.0, stop the service, restore that backup, then
+  install the trusted 1.0 MQTT agent binary using the 1.0 release procedure. Do not
+  try to make a current release installer accept a 1.0 archive that lacks the CLI.
 - A failed apply can leave a partially changed workload. Inspect
   `docker compose -p cc-NAME ps` and container logs. Resubmit a corrected manifest
-  with a new request ID, or send remove. There is no automatic rollback.
-- An undeliverable event blocks later operations. Restore broker connectivity and
-  permissions; the outbox retries without repeating the completed Docker operation.
+  with a new request ID, or send remove. An explicit revert changes desired Compose
+  configuration but does not restore Docker volumes or external databases.
+- Result delivery runs independently from Docker execution. A broker outage can delay
+  saved events without holding up other accepted operations. The durable journal is
+  bounded at 128 entries: 112 mutation slots and 16 reserved query slots. When the
+  relevant slots are full, new commands remain unacknowledged until capacity returns.
+  Restore broker connectivity and ACLs so saved results can drain; operations are not
+  repeated just because event publication is retried.
 - Never delete a pending journal to unblock the agent. Corrupt state requires an
   offline backup restore and reconciliation of actual Docker state.
 - Stop the service before moving state. Copy the entire directory, including receipts;
   losing receipts can allow old commands to execute again.
 - Monitor process restarts, journal file counts/disk space, `Event delivery pending`,
-  broker connections and application health. No HTTP health or metrics endpoint exists.
+  broker connections and application health. For the loopback HTTP endpoints and
+  optional non-retained MQTT heartbeat see [monitoring.md](monitoring.md). The sample
+  configuration defaults to `monitor_listen: 127.0.0.1:9080`; do not expose this
+  listener directly to an untrusted network.
+
+Use `captain-compose doctor` from the operator CLI for live broker, TLS, credential,
+Docker Engine and Compose checks. Agent `--check` validates local config/TLS paths and
+Docker access without contacting the broker; it does not prove MQTT reachability.
+
+For scripted lifecycle controls, see [lifecycle.md](lifecycle.md) and the Ansible role
+in [deploy/ansible/README.md](../deploy/ansible/README.md). The role is pinned to an
+explicit release version, requires attestation verification by default, and leaves
+existing config contents unchanged. A restored/updated agent always requires manual
+reconciliation of actual Docker workloads before resuming operation.
 
 ## Uninstall
 
