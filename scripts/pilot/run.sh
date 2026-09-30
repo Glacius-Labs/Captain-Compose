@@ -81,6 +81,10 @@ write_report() {
   if (( OBSERVATION_START_SECONDS > 0 )); then
     setup_elapsed=$((OBSERVATION_START_SECONDS - START_SECONDS))
     observation_elapsed=$((now - OBSERVATION_START_SECONDS))
+    if (( FINALIZED == 1 )); then
+      # Cleanup time is not observed uptime; stop at the final successful sample.
+      observation_elapsed=$((LAST_SAMPLE_SECONDS > OBSERVATION_START_SECONDS ? LAST_SAMPLE_SECONDS - OBSERVATION_START_SECONDS : 0))
+    fi
   else
     setup_elapsed=$elapsed
     observation_elapsed=0
