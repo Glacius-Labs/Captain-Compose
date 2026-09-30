@@ -27,5 +27,6 @@ if [ "$ready" != 1 ]; then
 fi
 
 apk add --no-cache bash jq openssl go git docker-cli-compose coreutils shellcheck
+git config --global --add safe.directory "$PWD"
 shellcheck scripts/pilot/*.sh
 bash scripts/pilot/run.sh "$@"

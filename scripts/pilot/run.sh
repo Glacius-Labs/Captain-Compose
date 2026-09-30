@@ -40,6 +40,7 @@ DOCKER_CLIENT_VERSION=$(docker version --format '{{.Client.Version}}')
 DOCKER_SERVER_VERSION=$(docker version --format '{{.Server.Version}}')
 COMPOSE_VERSION=$(docker compose version --short)
 MOSQUITTO_IMAGE=eclipse-mosquitto:2.0.22
+ARCHITECTURE=$(uname -m)
 PILOT_ID="pilot-$(date -u +%Y%m%d%H%M%S)-${RANDOM}"
 WORK=$(mktemp -d "/tmp/${PILOT_ID}.XXXXXX")
 BIN_DIR="$WORK/bin"
@@ -59,7 +60,7 @@ DISK_MOUNT=''
 CHECKS='[]'
 ACTIONS='[]'
 FAILURES='[]'
-NOT_RUN='["physical_reboot", "sudden_power_loss", "systemd_host_lifecycle", "native_arm64"]'
+NOT_RUN=$(jq -cn --arg arch "$ARCHITECTURE" '["physical_reboot", "sudden_power_loss", "systemd_host_lifecycle"] + (if $arch=="aarch64" or $arch=="arm64" then [] else ["native_arm64"] end)')
 MONITOR_SAMPLES=0
 EXIT_STATUS=0
 FINALIZED=0
@@ -87,14 +88,14 @@ write_report() {
   mkdir -p "$(dirname "$REPORT_PATH")"
   jq -n --arg pilot_id "$PILOT_ID" --arg outcome "$outcome" --arg started_at "$START_UTC" --arg updated_at "$ended" \
     --arg observation_started_at "$OBSERVATION_START_UTC" --arg duration_requested "$DURATION_TEXT" \
-    --arg source_sha "$SOURCE_SHA" --arg legacy_tag_sha "$LEGACY_TAG_SHA" --arg go_version "$GO_VERSION" --arg docker_client_version "$DOCKER_CLIENT_VERSION" \
+    --arg source_sha "$SOURCE_SHA" --arg architecture "$ARCHITECTURE" --arg legacy_tag_sha "$LEGACY_TAG_SHA" --arg go_version "$GO_VERSION" --arg docker_client_version "$DOCKER_CLIENT_VERSION" \
     --arg docker_server_version "$DOCKER_SERVER_VERSION" --arg compose_version "$COMPOSE_VERSION" --arg mosquitto_image "$MOSQUITTO_IMAGE" \
     --argjson source_dirty "$SOURCE_DIRTY" \
     --arg report_scope "disposable_nested_docker" --argjson elapsed_seconds "$elapsed" \
     --argjson setup_elapsed_seconds "$setup_elapsed" --argjson observation_elapsed_seconds "$observation_elapsed" \
     --argjson monitor_samples "$MONITOR_SAMPLES" --argjson checks "$CHECKS" --argjson observed_actions "$ACTIONS" \
     --argjson failures "$FAILURES" --argjson not_run "$NOT_RUN" \
-    '{pilot_id:$pilot_id,outcome:$outcome,started_at:$started_at,updated_at:$updated_at,observation_started_at:(if $observation_started_at=="" then null else $observation_started_at end),elapsed_seconds:$elapsed_seconds,setup_elapsed_seconds:$setup_elapsed_seconds,observation_elapsed_seconds:$observation_elapsed_seconds,duration_requested:$duration_requested,report_scope:$report_scope,source:{sha:$source_sha,dirty:$source_dirty},tools:{go:$go_version,docker_client:$docker_client_version,docker_server:$docker_server_version,compose:$compose_version,legacy_tag:"v1.0.0",legacy_tag_sha:$legacy_tag_sha,mosquitto_image:$mosquitto_image},monitor_samples:$monitor_samples,checks:$checks,observed_actions:$observed_actions,failures:$failures,not_run:$not_run}' >"$REPORT_PATH"
+    '{pilot_id:$pilot_id,outcome:$outcome,started_at:$started_at,updated_at:$updated_at,observation_started_at:(if $observation_started_at=="" then null else $observation_started_at end),elapsed_seconds:$elapsed_seconds,setup_elapsed_seconds:$setup_elapsed_seconds,observation_elapsed_seconds:$observation_elapsed_seconds,duration_requested:$duration_requested,report_scope:$report_scope,source:{sha:$source_sha,dirty:$source_dirty},platform:{architecture:$architecture},tools:{go:$go_version,docker_client:$docker_client_version,docker_server:$docker_server_version,compose:$compose_version,legacy_tag:"v1.0.0",legacy_tag_sha:$legacy_tag_sha,mosquitto_image:$mosquitto_image},monitor_samples:$monitor_samples,checks:$checks,observed_actions:$observed_actions,failures:$failures,not_run:$not_run}' >"$REPORT_PATH"
 }
 
 action() {
@@ -124,7 +125,7 @@ wait_for() {
     sleep 0.25
   done
 }
-# shellcheck disable=SC2329 # Invoked by name through wait_for's command dispatch.
+# shellcheck disable=SC2317,SC2329 # Invoked by name through wait_for's command dispatch.
 project_running() {
   [[ -n "$(docker ps --filter "label=com.docker.compose.project=cc-$1" --filter status=running --format '{{.ID}}' | head -n 1)" ]]
 }
@@ -139,12 +140,15 @@ journal_recorded() {
   done
   return 1
 }
-# shellcheck disable=SC2329 # Invoked by name through wait_for's command dispatch.
+# shellcheck disable=SC2317,SC2329 # Invoked by name through wait_for's command dispatch.
 wait_agent_ready() { grep -q 'MQTT subscription ready' "$WORK/agent.log"; }
 wait_saved_event() { journal_recorded "$1" complete; }
 json_success() { jq -e '.ok == true and .state == "completed"' <<<"$1" >/dev/null; }
 json_result_success() { jq -e '.ok == true and (.state == "delivered" or .state == "executed") and .result.success == true' <<<"$1" >/dev/null; }
-# shellcheck disable=SC2329 # Invoked by name through wait_for's command dispatch.
+json_active_deployment() {
+  jq -e '.ok == true and .state == "completed" and .result.phase == "active" and .result.drift == false and (.result.services | length > 0) and all(.result.services[]; .state == "running" and .health == "healthy")' <<<"$1" >/dev/null
+}
+# shellcheck disable=SC2317,SC2329 # Invoked by name through wait_for's command dispatch.
 compose_waiting() { project_running "$1"; }
 operator_env_config() {
   local password_file=$1 ca_file=$2 timeout=${3:-30s}
@@ -194,7 +198,7 @@ stop_agent() {
 }
 result_request_id() { jq -r '.request_id // empty' <<<"$1"; }
 
-# shellcheck disable=SC2329 # Registered as an EXIT trap and invoked dynamically by Bash.
+# shellcheck disable=SC2317,SC2329 # Registered as an EXIT trap and invoked indirectly by Bash.
 cleanup() {
   stop_agent
   if [[ -n "$V1_PID" ]]; then kill -TERM "$V1_PID" 2>/dev/null || true; wait "$V1_PID" 2>/dev/null || true; fi
@@ -207,7 +211,7 @@ cleanup() {
     docker compose --env-file /dev/null --project-name "cc-$name" --file "$PWD/tests/acceptance/fixtures/persistent-data.yaml" down --remove-orphans >/dev/null 2>&1 || true
   done
 }
-# shellcheck disable=SC2329 # Registered as an EXIT trap and invoked dynamically by Bash.
+# shellcheck disable=SC2317,SC2329 # Registered as an EXIT trap and invoked indirectly by Bash.
 finish() {
   local original=$?
   (( FINALIZED == 0 )) || return "$original"
@@ -328,7 +332,10 @@ check duplicate_result_query passed "two independent v2 queries returned the sam
 
 DEPLOY_RESULT=$(operator deploy "$LEGACY_NAME" tests/acceptance/fixtures/upgrade-v1.yaml) || fail v2_legacy_adoption "v2 could not adopt legacy deployment state"
 json_success "$DEPLOY_RESULT" || fail v2_legacy_adoption "v2 legacy-state adoption did not complete"
-REVISION=$(jq -r '.result.desired_revision // empty' <<<"$DEPLOY_RESULT")
+STATUS_RESULT=$(operator inspect "$LEGACY_NAME") || fail revision_output "could not read deployment revision after apply"
+json_success "$STATUS_RESULT" || fail revision_output "inspect did not return deployment status after apply"
+json_active_deployment "$STATUS_RESULT" || fail deployment_health "deployment did not become active with healthy services and no drift"
+REVISION=$(jq -r '.result.desired_revision // empty' <<<"$STATUS_RESULT")
 [[ "$REVISION" =~ ^[0-9a-f]{64}$ ]] || fail revision_output "deployment result omitted its SHA-256 desired revision"
 check v2_legacy_adoption passed "v2 wrote revisioned deployment state while retaining the existing named volume"
 
@@ -386,8 +393,8 @@ check process_restart passed "current agent restarted with its persisted state a
 VOLUME="cc-$LEGACY_NAME-pilot-data"
 docker volume inspect "$VOLUME" >/dev/null || fail data_backup "expected named data volume was not present"
 docker run --rm --volume "$VOLUME:/pilot-data:ro" --volume "$WORK:/backup" alpine:3.22 sh -c 'tar -cf /backup/data.tar -C /pilot-data .'
-cp -a "$STATE_DIR" "$WORK/state-backup"
 stop_agent
+cp -a "$STATE_DIR" "$WORK/state-backup"
 docker compose --env-file /dev/null --project-name "cc-$LEGACY_NAME" --file tests/acceptance/fixtures/upgrade-v1.yaml down --remove-orphans >/dev/null
 docker volume rm "$VOLUME" >/dev/null
 docker volume create "$VOLUME" >/dev/null
@@ -442,11 +449,16 @@ if wait_for 'disk-full agent subscription' 12 grep -q 'MQTT subscription ready' 
   DISK_REQUEST=$("$BIN_DIR/captain-compose" --config "$CONFIG_DIR/diskfull-operator.yaml" --environment pilot --json deploy diskfull tests/acceptance/fixtures/persistent-data.yaml --wait=false) || fail disk_full "broker rejected the disk-full fixture command"
   DISK_REQUEST_ID=$(result_request_id "$DISK_REQUEST")
   [[ -n "$DISK_REQUEST_ID" ]] || fail disk_full "operator omitted disk-full request ID"
-  # shellcheck disable=SC2329 # Invoked by name through wait_for's command dispatch.
+  # shellcheck disable=SC2317,SC2329 # Invoked by name through wait_for's command dispatch.
   disk_agent_exited() { ! kill -0 "$DISK_AGENT_PID" 2>/dev/null; }
   wait_for 'disk-full agent exits after journal failure' 15 disk_agent_exited || fail disk_full "full journal did not stop the agent within the bounded window"
   wait "$DISK_AGENT_PID" 2>/dev/null || true
 else
+  for _ in $(seq 1 20); do
+    kill -0 "$DISK_AGENT_PID" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -TERM "$DISK_AGENT_PID" 2>/dev/null || true
   wait "$DISK_AGENT_PID" 2>/dev/null || true
 fi
 DISK_AGENT_PID=''
@@ -486,7 +498,7 @@ while :; do
   kill -0 "$AGENT_PID" 2>/dev/null || fail observation_agent_alive "agent exited during the observation window"
   docker inspect -f '{{.State.Running}}' "$BROKER" 2>/dev/null | grep -qx true || fail observation_broker_alive "private broker exited during the observation window"
   SAMPLE=$(operator inspect "$LEGACY_NAME") || fail observation_query "deployment inspection failed during the observation window"
-  json_success "$SAMPLE" || fail observation_query "deployment inspection reported failure during the observation window"
+  json_active_deployment "$SAMPLE" || fail observation_query "deployment was not active, healthy, and drift-free during the observation window"
   MONITOR_SAMPLES=$((MONITOR_SAMPLES + 1))
   write_report
   observation_elapsed=$(( $(date -u +%s) - OBSERVATION_START_SECONDS ))

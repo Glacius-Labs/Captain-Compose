@@ -46,13 +46,35 @@ then writes the report and removes only resources named by that invocation. Set
 `--report /workspace/path/to/report.json` to choose a report path; by default the
 report is written under `scripts/pilot/` on the mounted workspace and refreshed after
 each check and periodic inspection. The default report filename is ignored by Git.
-Multi-day runs require keeping the outer container attached until it exits. No
-scheduler, cloud VM, or remote notification service is created.
+For a multi-day run, the outer container may run detached. The Docker daemon and host
+must remain available; this command does not create a scheduler, cloud VM, or remote
+notification service. Keep the source read-only and put the report in a separate
+bind-mounted directory, for example:
+
+```bash
+repo="$PWD"
+reports="$(dirname "$repo")/captain-compose-pilot-reports"
+mkdir -p "$reports"
+docker run --rm --detach --name captain-compose-pilot-72h --restart=no \
+  --privileged --cpus 2 --memory 4g \
+  --log-driver local --log-opt max-size=10m --log-opt max-file=3 \
+  --mount "type=bind,source=$repo,target=/workspace,readonly" \
+  --mount "type=bind,source=$reports,target=/reports" \
+  --workdir /workspace --env CAPTAIN_PILOT_DIND=1 \
+  docker:29.4.1-dind \
+  sh scripts/pilot/container-run.sh --duration 72h --report /reports/pilot-72h.json
+```
+
+Inspect progress with `docker logs captain-compose-pilot-72h` and the live JSON at
+`$reports/pilot-72h.json`. The container removes itself on completion; the report
+remains in the separate host directory. Stop only that named container to cancel the
+run. A forced stop is not a simulated sudden-power-loss test.
 
 The pilot exercises a v1.0.0 pending journal request, upgrades that state to the
 current agent, checks duplicate result queries, broker disconnection and saved-result
 recovery, expiry and revision rejection, a same-state agent restart, a simulated
 state/data restore, disk-full on capped tmpfs, missing Docker access, and MQTT
-credential/TLS failures. Read [the acceptance matrix](acceptance-matrix.md) for exact
-boundaries. A passing container run is not physical reboot, sudden power-loss,
-systemd-host, or native ARM64 evidence.
+credential/TLS failures. CI runs the two-minute pilot on amd64 and native ARM64 Linux
+runners. Separate Linux CI checks install and start the systemd service. Read [the
+acceptance matrix](acceptance-matrix.md) for exact boundaries; these CI checks still
+do not establish physical reboot or sudden power-loss behavior.

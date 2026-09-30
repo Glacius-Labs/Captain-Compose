@@ -20,9 +20,11 @@ not evidence of a physical host reboot or sudden power loss.
 | TLS certificate failure | Connect to the isolated TLS broker with a wrong CA/hostname and verify startup failure | Test certificates only |
 | Physical reboot | Not run by this harness | Requires a separately approved disposable physical/virtual reference host |
 | Sudden power loss | Not run by this harness | Requires controlled infrastructure capable of removing power safely |
-| systemd install and lifecycle | Separate Linux CI job when available | The container runner does not claim to verify systemd behavior |
-| Native ARM64 pilot | Separate native ARM64 runner when available | Cross-compilation or emulation is not native hardware acceptance |
+| systemd install and lifecycle | Linux CI provisions and starts the service, verifies idempotent provisioning and unit enablement, then exercises MQTT request handling | CI does not simulate host reboot or power interruption |
+| Native ARM64 pilot | CI matrix runs this same disposable pilot on a native ARM64 Linux runner; report architecture distinguishes it from amd64 | Cross-compilation or emulation is not native hardware acceptance |
 
 The runner's observed checks are authoritative for a given invocation. This table
 describes the intended coverage; consult the report's `checks` and `not_run` arrays
-for what actually ran.
+for what actually ran. On native `aarch64`/`arm64`, `native_arm64` is omitted from
+`not_run`; on other architectures it remains explicitly unverified. The report records
+the architecture, source SHA and dirty flag, legacy tag SHA, and tool versions.
