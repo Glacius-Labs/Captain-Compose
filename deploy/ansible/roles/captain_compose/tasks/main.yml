@@ -313,13 +313,16 @@
 - name: Validate configuration and Docker access as the service user
   ansible.builtin.command:
     argv:
+      - runuser
+      - -u
+      - "{{ captain_compose_user }}"
+      - --
+      - env
+      - "DOCKER_CONFIG={{ captain_compose_config_directory }}/docker"
       - "{{ captain_compose_install_prefix }}/captain-compose-mqtt"
       - --config
       - "{{ captain_compose_config_directory }}/config.yaml"
       - --check
-  become_user: "{{ captain_compose_user }}"
-  environment:
-    DOCKER_CONFIG: "{{ captain_compose_config_directory }}/docker"
   changed_when: false
   no_log: true
   when: not captain_compose_service_was_active or captain_compose_service_needs_restart
