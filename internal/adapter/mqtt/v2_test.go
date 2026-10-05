@@ -115,6 +115,8 @@ func TestV2ExecutionContinuesWhileOutboxPublicationFails(t *testing.T) {
 			t.Fatal("execution stalled behind outbox delivery")
 		}
 	}
+	require.Eventually(t, func() bool { return l.Stats().Outbox == 2 }, 2*time.Second, 10*time.Millisecond,
+		"both execution results should be persisted while publication keeps failing")
 	cancel()
 	require.NoError(t, <-done)
 	rt.mu.Lock()
