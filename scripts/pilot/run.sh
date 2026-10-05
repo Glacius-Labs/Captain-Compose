@@ -264,11 +264,17 @@ OPERATOR_SHA256=$(sha256sum "$BIN_DIR/captain-compose" | awk '{print $1}')
 check build passed "built tag v1.0.0 and current captain-compose-mqtt and captain-compose binaries"
 
 CURRENT_STAGE=broker_tls_and_credentials
-openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/certs/ca.key" -out "$WORK/certs/ca.crt" -days 2 -subj '/CN=Captain Compose Pilot CA' -addext 'basicConstraints=critical,CA:TRUE' >/dev/null 2>&1
+# Keep the disposable broker's certificates valid beyond the entire requested
+# observation window; a fixed two-day lifetime invalidated the 72-hour pilot.
+CERT_DAYS=$(( (DURATION_SECONDS + 86399) / 86400 + 2 ))
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/certs/ca.key" -out "$WORK/certs/ca.crt" -days "$CERT_DAYS" -subj '/CN=Captain Compose Pilot CA' -addext 'basicConstraints=critical,CA:TRUE' >/dev/null 2>&1
 openssl req -newkey rsa:2048 -nodes -keyout "$WORK/certs/server.key" -out "$WORK/certs/server.csr" -subj '/CN=127.0.0.1' >/dev/null 2>&1
 printf 'subjectAltName=IP:127.0.0.1,DNS:localhost\nextendedKeyUsage=serverAuth\n' >"$WORK/certs/server.ext"
-openssl x509 -req -in "$WORK/certs/server.csr" -CA "$WORK/certs/ca.crt" -CAkey "$WORK/certs/ca.key" -CAcreateserial -out "$WORK/certs/server.crt" -days 2 -sha256 -extfile "$WORK/certs/server.ext" >/dev/null 2>&1
-openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/certs/wrong-ca.key" -out "$WORK/certs/wrong-ca.crt" -days 2 -subj '/CN=Wrong Pilot CA' -addext 'basicConstraints=critical,CA:TRUE' >/dev/null 2>&1
+openssl x509 -req -in "$WORK/certs/server.csr" -CA "$WORK/certs/ca.crt" -CAkey "$WORK/certs/ca.key" -CAcreateserial -out "$WORK/certs/server.crt" -days "$CERT_DAYS" -sha256 -extfile "$WORK/certs/server.ext" >/dev/null 2>&1
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$WORK/certs/wrong-ca.key" -out "$WORK/certs/wrong-ca.crt" -days "$CERT_DAYS" -subj '/CN=Wrong Pilot CA' -addext 'basicConstraints=critical,CA:TRUE' >/dev/null 2>&1
+for cert in "$WORK/certs/ca.crt" "$WORK/certs/server.crt"; do
+  openssl x509 -in "$cert" -noout -checkend "$((DURATION_SECONDS + 86400))" >/dev/null || fail broker_certificate_lifetime "test certificate expires within the observation window or its one-day buffer"
+done
 printf '%s\n' "$PASSWORD" >"$CONFIG_DIR/password"
 chmod 600 "$CONFIG_DIR/password"
 docker run --rm -v "$WORK/config:/tmp/pilot" --entrypoint mosquitto_passwd "$MOSQUITTO_IMAGE" -b -c /tmp/pilot/passwords "$USERNAME" "$PASSWORD"

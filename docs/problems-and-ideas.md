@@ -13,6 +13,7 @@
 | Unbounded waits, permissive configuration | Context deadlines, strict YAML/JSON and TLS checks |
 | Prototype Go version mismatched release workflow | One Go version in go.mod; gated release matrix |
 | No tested installation path | Checksummed installer, offline mode and systemd provisioning |
+| Pilot broker certificate expired after 48 hours of a 72-hour run | Derive disposable test certificate lifetime from the requested observation duration and verify it before startup |
 
 ## Intentional boundaries and remaining decisions
 

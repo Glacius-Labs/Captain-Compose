@@ -14,6 +14,10 @@ creates no cloud resources. A live JSON report captures UTC start and end times,
 setup and observation elapsed times, checks, observed actions, failures, and cases
 that this container cannot verify.
 
+The runner generates a private broker CA and server certificate with validity beyond
+the requested observation duration plus a one-day buffer. It checks that lifetime
+before starting the broker; an expired test certificate would invalidate a long run.
+
 Run the short CI pilot on Linux:
 
 ```bash
