@@ -25,6 +25,9 @@ The 1.1 operations release is first published as `1.1.0-rc.1`. Stable promotion
 requires green CI, verified signed release archives, and a successful 72-hour pilot
 with no observation gap exceeding 120 seconds. Version tags remain immutable. Any
 runtime correction restarts the full observation period on the corrected candidate.
+The first two 72-hour attempts did not pass: Docker Desktop stopped the first, and
+the second outlived a disposable broker certificate. Candidate `1.1.0-rc.2` fixes
+that test fixture; it needs a new complete observation window before stable release.
 
 - A new operator can install, plan, deploy, query an uncertain result, diagnose and recover.
 - Event publication failure does not repeat completed Docker work or block other accepted

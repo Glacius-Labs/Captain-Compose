@@ -52,7 +52,7 @@ service user, then returns an active service to active state. A preflight failur
 the service stopped for investigation:
 
 ```bash
-sudo bash scripts/upgrade.sh --version 1.1.0-rc.1
+sudo bash scripts/upgrade.sh --version 1.1.0-rc.2
 ```
 
 `--archive-dir` supplies a downloaded release and checksum file. For offline use, pass

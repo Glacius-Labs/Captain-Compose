@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0-rc.2 — 2026-10-05
+
+- Extend disposable pilot TLS certificates beyond the requested observation period
+  and check their remaining lifetime before starting the broker. The first long run
+  was interrupted by Docker Desktop; the second revealed the old two-day test
+  certificate lifetime. Neither run meets the 72-hour acceptance gate.
+- No agent or operator runtime behavior changes from rc.1. Stable promotion still
+  requires a fresh complete 72-hour pilot and verified release assets.
+
 ## 1.1.0-rc.1 — 2026-09-30
 
 ### Operator workflow
