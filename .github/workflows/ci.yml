@@ -132,7 +132,7 @@ jobs:
           test -z "$(gofmt -l cmd internal tests)"
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - run: GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - run: shellcheck scripts/*.sh scripts/pilot/*.sh
       - name: Validate Ansible role syntax
         run: |
