@@ -68,7 +68,7 @@ jobs:
           test -z "$(gofmt -l cmd internal)"
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - run: GOTOOLCHAIN=local go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - run: shellcheck scripts/*.sh
       - run: bash scripts/test-install.sh
       - run: bash scripts/release.sh 0.0.0-test dist/0.0.0-test
