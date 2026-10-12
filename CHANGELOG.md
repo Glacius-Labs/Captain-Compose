@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 — 2026-10-12
+
+- Update the Go toolchain to 1.27.2 and `golang.org/x/net` to 0.60.0 to address
+  vulnerabilities that govulncheck reported as reachable in the v1.0.0 source.
+  No application behavior changes are intended.
+
 ## 1.0.0 — 2026-09-30
 
 First stable release of the MQTT deployment agent and its installation tooling.
