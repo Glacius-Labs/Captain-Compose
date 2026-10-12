@@ -55,6 +55,12 @@
 - The new installer requires GitHub CLI for provenance verification unless the operator
   explicitly selects checksum-only bootstrap. See the offline verification procedure.
 
+## 1.0.1 — 2026-10-12
+
+- Backport Go 1.27.2 and `golang.org/x/net` 0.60.0 to the supported 1.0
+  maintenance line after an exact-tag scan found seven reachable findings in
+  v1.0.0. No application behavior changes are intended.
+
 ## 1.0.0 — 2026-09-30
 
 First stable release of the MQTT deployment agent and its installation tooling.
