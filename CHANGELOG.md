@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0-rc.3 — 2026-10-12
+
+- Update the build toolchain to Go 1.27.2 and `golang.org/x/net` to 0.60.0
+  after the required vulnerability scan identified newly published reachable
+  findings in the previous versions. Pin CI's vulnerability scan to the
+  toolchain installed from `go.mod`.
+- The fourth 72-hour pilot passed for rc.2, but these dependency and toolchain
+  changes require a new full CI run, immutable candidate and uninterrupted
+  72-hour observation before stable 1.1.0 can be published.
+
 ## 1.1.0-rc.2 — 2026-10-05
 
 - Extend disposable pilot TLS certificates beyond the requested observation period
