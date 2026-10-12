@@ -21,13 +21,17 @@ explicit acknowledgement that application data is not rolled back.
 
 ## Acceptance
 
-The 1.1 operations release is first published as `1.1.0-rc.1`. Stable promotion
+The 1.1 operations release was first published as `1.1.0-rc.1`. Stable promotion
 requires green CI, verified signed release archives, and a successful 72-hour pilot
 with no observation gap exceeding 120 seconds. Version tags remain immutable. Any
 runtime correction restarts the full observation period on the corrected candidate.
-The first two 72-hour attempts did not pass: Docker Desktop stopped the first, and
-the second outlived a disposable broker certificate. Candidate `1.1.0-rc.2` fixes
-that test fixture; it needs a new complete observation window before stable release.
+Attempts 1 and 3 were interrupted when Docker Desktop stopped; attempt 2 outlived
+a disposable broker certificate. Candidate `1.1.0-rc.2` corrected that fixture.
+Its fourth attempt passed on 2026-10-12: 259,200 observed seconds, 9,001
+inspections, 31 seconds maximum gap, 17 passed checks and zero failures.
+The [full report](releases/evidence/v1.1.0-72h-pilot.json) binds that result to
+the tested source revision; physical reboot and customer infrastructure remain
+separate acceptance boundaries.
 
 - A new operator can install, plan, deploy, query an uncertain result, diagnose and recover.
 - Event publication failure does not repeat completed Docker work or block other accepted
@@ -35,6 +39,6 @@ that test fixture; it needs a new complete observation window before stable rele
 - Expired queued commands do not mutate Docker; stale revisions fail before mutation.
 - Previously accepted 1.0 state and requests remain readable; upgrade tests prove it.
 - CI verifies Linux/Windows/macOS, real Docker/MQTT, installation and systemd behavior.
-- A pilot records its actual duration and injected failures. Multi-day and native ARM64
-  acceptance remain unverified until those exact runs finish; infrastructure costs and
-  production workloads are not implied by this development plan.
+- The isolated multi-day pilot records its actual duration and injected failures.
+  Native ARM64 CI is separate from a native ARM64 multi-day run; infrastructure costs
+  and production workloads are not implied by this development plan.

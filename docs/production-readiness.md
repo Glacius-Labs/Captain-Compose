@@ -53,14 +53,38 @@ coverage. See the release PR and `problems-and-ideas.md` for details.
 
 Repository controls configured and read back on 2026-09-30:
 
-- `main` requires an up-to-date PR with all five checks from the GitHub Actions app,
-  including for administrators. Force pushes and branch deletion are disabled.
+- `main` requires an up-to-date PR, including for administrators. At that date five
+  GitHub Actions checks were required; the current nine-check rule is recorded below.
+  Force pushes and branch deletion are disabled.
 - The `release` environment accepts only `v*` tags.
 - An active tag ruleset prevents updates and deletion of existing `v*` tags.
 - Private vulnerability reporting is enabled.
 - Release artifacts remain draft until their checksums and attestations are verified
   and the authorized release operator publishes them. No extra human-reviewer gate
   is configured for this single-maintainer release workflow.
+
+## 1.1.0 candidate and 72-hour acceptance (2026-10-12)
+
+- The immutable candidate `v1.1.0-rc.2` resolves to
+  `c9acf7f37e7749408115de8a2b2225e644641bcd`.
+  [Main CI](https://github.com/Glacius-Labs/Captain-Compose/actions/runs/37333960011)
+  and the [candidate release workflow](https://github.com/Glacius-Labs/Captain-Compose/actions/runs/37334031581)
+  passed. Its six archive checksums and online/offline GitHub attestations were
+  verified for the repository, release workflow and exact tag.
+- The [complete fourth-attempt pilot report](releases/evidence/v1.1.0-72h-pilot.json)
+  records `outcome=passed`, a clean source at that SHA, 259,200 observed seconds,
+  9,001 inspections, a maximum 31-second sample gap, 17 passed checks and no
+  failures. The container exited with code 0. Three earlier attempts were invalid:
+  two Docker Desktop interruptions and one expired disposable broker certificate.
+- The nested Docker pilot did not test physical reboot, sudden power loss, native
+  ARM64 multi-day observation or a real host's systemd lifecycle. Native ARM64 and
+  Linux systemd have separate CI coverage; customer-specific broker, backup and
+  production-host acceptance remain separate.
+- Live GitHub rules read back on 2026-10-12 require a current PR and nine GitHub
+  Actions contexts on `main`: Linux, Windows and macOS race tests; Linux amd64 and
+  ARM64 integration; quality; ARM64 tests; and amd64 and ARM64 disposable pilots.
+  Administrators are included, force pushes and deletion are disabled, and
+  conversations must be resolved. The `v*` tag ruleset blocks updates and deletion.
 
 Production-host acceptance is separate from publishing binaries: configure real
 broker TLS/ACLs and backups, then run create/update/remove plus disconnect/restart

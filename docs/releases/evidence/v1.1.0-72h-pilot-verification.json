@@ -1,0 +1,21 @@
+{
+  "verified_at_utc": "2026-10-12T15:09:53Z",
+  "candidate_tag": "v1.1.0-rc.2",
+  "candidate_source_sha": "c9acf7f37e7749408115de8a2b2225e644641bcd",
+  "source_bundle_sha256": "eacdb19801c2ca29280c20f5309d16fc6c0987268437a067be9ef56f610f9fda",
+  "attempt": 4,
+  "container_name": "captain-compose-soak-rc2-a4-c9acf7f",
+  "container_id": "d2765b56df29479597d47d68c348200f5ae43cb0c1e6ef26d470b1be36ead209",
+  "container_started_at_utc": "2026-10-09T15:03:48.569922021Z",
+  "container_finished_at_utc": "2026-10-12T15:06:25.778801055Z",
+  "container_exit_code": 0,
+  "report": "v1.1.0-72h-pilot.json",
+  "report_sha256": "50b9b8a911a3d366f8f1a45f90416c70304485d5c8c852e2e3c9863ba6b34d2a",
+  "report_outcome": "passed",
+  "observation_seconds": 259200,
+  "monitor_samples": 9001,
+  "max_sample_gap_seconds": 31,
+  "failed_checks": 0,
+  "failures": 0,
+  "scope": "local disposable nested Docker pilot; host power, physical reboot, host systemd lifecycle, and native ARM64 were not exercised"
+}
