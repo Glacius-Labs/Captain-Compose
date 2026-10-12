@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0 — 2026-10-12
+
+- Promote the 1.1 operator and agent after the isolated 72-hour pilot of
+  `v1.1.0-rc.2` at source `c9acf7f37e7749408115de8a2b2225e644641bcd`.
+  The fourth complete attempt passed 17 checks over 259,200 observed seconds
+  with 9,001 inspections, a 31-second maximum sample gap and no failures.
+  [The full pilot report](docs/releases/evidence/v1.1.0-72h-pilot.json)
+  records the scenarios and exclusions.
+- Set the release documentation, installation examples and Ansible default to
+  the stable version. The agent, operator and pilot runtime code remain the
+  tested release candidate's code.
+
 ## 1.1.0-rc.2 — 2026-10-05
 
 - Extend disposable pilot TLS certificates beyond the requested observation period
