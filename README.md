@@ -77,16 +77,17 @@ new request file for a different operation. Custom controllers can use the
 
 ## Install and provision
 
-The new operations workflow is available in
-[Captain Compose 1.1.0-rc.2](https://github.com/Glacius-Labs/Captain-Compose/releases/tag/v1.1.0-rc.2).
-It is a release candidate pending the recorded 72-hour acceptance run.
+The security-updated operations workflow is available in
+[Captain Compose 1.1.0-rc.3](https://github.com/Glacius-Labs/Captain-Compose/releases/tag/v1.1.0-rc.3).
+It remains a prerelease while its new 72-hour acceptance run completes. Earlier
+1.1 candidates are superseded; their archives remain available for audit.
 [1.0.0](https://github.com/Glacius-Labs/Captain-Compose/releases/tag/v1.0.0)
-remains the stable agent-only release until 1.1 is promoted.
+remains the earlier stable agent-only release and predates the security rebuild.
 Archives include both binaries, documentation, example config, license and installers.
 The release pipeline produces checksums and build attestations.
 
 ```bash
-bash scripts/install.sh --version 1.1.0-rc.2 --prefix "$HOME/.local/bin"
+bash scripts/install.sh --version 1.1.0-rc.3 --prefix "$HOME/.local/bin"
 bash scripts/provision.sh --config ./production.yaml --dry-run
 ```
 
