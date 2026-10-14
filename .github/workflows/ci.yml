@@ -35,7 +35,7 @@ jobs:
       - run: go test -race '-coverprofile=coverage.out' ./...
       - run: go vet ./...
       - run: go build ./cmd/...
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-${{ matrix.os }}
           path: coverage.out
@@ -111,7 +111,7 @@ jobs:
             --env CAPTAIN_PILOT_DIND=1 \
             docker:29.4.1-dind \
             sh scripts/pilot/container-run.sh --duration 2m
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: disposable-pilot-report-${{ matrix.arch }}
